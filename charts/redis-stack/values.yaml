@@ -1,8 +1,9 @@
 
 # ---------------------------------------------------------------------------
-# Standalone Redis Stack — shared memory backend for agentic workloads
+# Standalone Redis 8 — shared memory backend for agentic workloads
 #
-# Deployed into the `redis` namespace as a single instance with RediSearch.
+# Deployed into the `redis` namespace as a single instance of open-source Redis 8,
+# which has search, JSON and the FLAT / HNSW / SVS-VAMANA vector indexes built in.
 # Access requires a password, and the Service is ClusterIP — reachable only
 # from inside the cluster. After deployment the in-cluster URL is:
 #

@@ -4,7 +4,7 @@
 
 ```
 charts/
-├── redis-stack/          ← Redis Stack (auth + ClusterIP + NetworkPolicy hardened)
+├── redis-stack/          ← Redis 8 with search + SVS-VAMANA (auth + ClusterIP + NetworkPolicy hardened)
 ├── pgvector/             ← PostgreSQL + pgvector
 ├── agent-sandbox/        ← Agent Sandbox (values.yaml + default-templates.yaml)
 └── kuberay/              ← KubeRay RayCluster

@@ -1,15 +1,23 @@
 name: redis-stack-server
 redis_stack_server:
-  image: "redis/redis-stack-server"
-  tag: "7.4.0-v8"
+  # Official open-source Redis 8. Search (with the SVS-VAMANA vector index), JSON,
+  # Bloom and TimeSeries are built in; no separate Redis Stack image is needed.
+  image: "redis"
+  tag: "8.10.3"
   port: 6379
   replicas: 1
   storage_class: ""
   storage: 1Gi
   affinity: {}
+  # The redis image switches to its `redis` user only when started as root; the
+  # container drops every capability, so start it as that user directly.
+  securityContext:
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
   auth:
     # Redis requires a password (requirepass) by default. The password is stored
-    # in the `<name>-credentials` Secret and injected via REDIS_ARGS.
+    # in the `<name>-credentials` Secret and passed as `--requirepass`.
     # Required: set via --set or a custom values file. There is no default.
     enabled: true
     password: ""

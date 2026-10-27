@@ -40,8 +40,10 @@ vllm_sr_dashboard_enabled: true
 # Client-facing name of the vLLM Semantic Router model in LiteLLM (litellm mode).
 vllm_sr_litellm_model_name: "vllm-sr/auto"
 
-# --- Redis Stack ---
+# --- Redis (open-source Redis 8: search, JSON, SVS-VAMANA vector index) ---
 redis_stack_namespace: "redis"
+redis_stack_image: "redis"
+redis_stack_tag: "8.10.3"
 redis_stack_storage_class: ""          # empty = cluster default StorageClass
 redis_stack_persistence_size: "10Gi"
 

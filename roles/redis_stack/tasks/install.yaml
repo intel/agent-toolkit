@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 ---
 # =============================================================================
-# Redis Stack — Install via Helm
+# Redis (open-source Redis 8) — Install via Helm
 # =============================================================================
 
 - name: "redis_stack | Create namespace"
@@ -69,6 +69,8 @@
       # Overrides go under the subchart name (redis-stack-server), not "redis".
       redis-stack-server:
         redis_stack_server:
+          image: "{{ redis_stack_image }}"
+          tag: "{{ redis_stack_tag }}"
           storage_class: "{{ redis_stack_storage_class }}"
           storage: "{{ redis_stack_persistence_size }}"
           auth:
@@ -105,6 +107,6 @@
 - name: "redis_stack | Install complete"
   ansible.builtin.debug:
     msg:
-      - "Redis Stack deployed in namespace '{{ redis_stack_namespace }}'"
+      - "Redis {{ redis_stack_tag }} deployed in namespace '{{ redis_stack_namespace }}'"
       - "In-cluster URL: redis://default:<password>@redis-stack-server.{{ redis_stack_namespace }}.svc.cluster.local:6379"
       - "Credentials Secret: redis-stack-server-credentials (keys: REDIS_PASSWORD, REDIS_URL)"

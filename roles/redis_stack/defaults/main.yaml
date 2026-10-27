@@ -4,8 +4,11 @@
 # =============================================================================
 # Redis Stack Role Defaults
 # =============================================================================
-# Redis Stack with RediSearch module — provides short-term memory,
+# Open-source Redis 8 with the built-in Query Engine (search, JSON and the
+# FLAT / HNSW / SVS-VAMANA vector indexes) — provides short-term memory,
 # session state, and semantic vector cache for agentic workloads.
+# Role and Service names keep "redis_stack" / "redis-stack-server" so existing
+# clients keep working.
 #
 # In-cluster URL after deployment:
 #   redis://redis-stack-server.{{ redis_stack_namespace }}.svc.cluster.local:6379
@@ -13,6 +16,8 @@
 
 redis_stack_namespace: "redis"
 redis_stack_release_name: "redis"
+redis_stack_image: "redis"
+redis_stack_tag: "8.10.3"
 # Empty = use the cluster's default StorageClass (provided by the ai-solutions
 # `storage` platform component). Override to pin a specific class.
 redis_stack_storage_class: ""

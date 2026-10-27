@@ -62,9 +62,39 @@
       {{ (_val_modules.stdout | default('') ~ ' ' ~ _val_modules.stderr | default('') ~ ' ' ~ _val_modules.msg | default('')) | trim }}
     quiet: true
 
+# Creates and drops a tiny SVS-VAMANA index; fails on a Redis without it (< 8.2).
+- name: "redis_stack | validate | Create a test SVS-VAMANA index"
+  kubernetes.core.k8s_exec:
+    namespace: "{{ redis_stack_namespace }}"
+    pod: "{{ _val_pods.resources[0].metadata.name }}"
+    command: "redis-cli {{ ('-a ' ~ (_redis_pass.stdout | trim | quote) ~ ' --no-auth-warning ') if (_redis_pass.stdout | default('') | trim | length > 0) else '' }}FT.CREATE _validate_svs ON HASH PREFIX 1 _validate_svs: SCHEMA v VECTOR SVS-VAMANA 6 TYPE FLOAT32 DIM 4 DISTANCE_METRIC COSINE"
+  register: _val_svs
+  failed_when: false
+  changed_when: false
+  no_log: true
+
+- name: "redis_stack | validate | Drop the test SVS-VAMANA index"
+  kubernetes.core.k8s_exec:
+    namespace: "{{ redis_stack_namespace }}"
+    pod: "{{ _val_pods.resources[0].metadata.name }}"
+    command: "redis-cli {{ ('-a ' ~ (_redis_pass.stdout | trim | quote) ~ ' --no-auth-warning ') if (_redis_pass.stdout | default('') | trim | length > 0) else '' }}FT.DROPINDEX _validate_svs"
+  when: "'OK' in _val_svs.stdout | default('')"
+  failed_when: false
+  changed_when: false
+  no_log: true
+
+- name: "redis_stack | validate | Assert SVS-VAMANA is available"
+  ansible.builtin.assert:
+    that: "'OK' in _val_svs.stdout | default('')"
+    fail_msg: >-
+      SVS-VAMANA index could not be created (needs Redis 8.2+):
+      {{ (_val_svs.stdout | default('') ~ ' ' ~ _val_svs.stderr | default('') ~ ' ' ~ _val_svs.msg | default('')) | trim }}
+    quiet: true
+
 - name: "redis_stack | validate | Summary"
   ansible.builtin.debug:
     msg:
       - "Redis pods: OK ({{ _val_pods.resources | length }} running)"
       - "Redis PING: {{ 'OK' if 'PONG' in _val_ping.stdout | default('') else 'FAIL' }}"
       - "RediSearch module: {{ 'OK' if 'search' in _val_modules.stdout | default('') else 'FAIL' }}"
+      - "SVS-VAMANA index: {{ 'OK' if 'OK' in _val_svs.stdout | default('') else 'FAIL' }}"
