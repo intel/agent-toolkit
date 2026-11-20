@@ -17,6 +17,7 @@
 > |---|---|---|
 > | `deploy_agent_sandbox`, `deploy_redis`, `deploy_pgvector` | `agent_sandbox_enabled`, `redis_stack_enabled`, `pgvector_enabled` (on) | `config.agent-toolkit.yaml` |
 > | `deploy_openshell`, `deploy_kuberay` | `openshell_enabled`, `kuberay_enabled` (off) | `config.agent-toolkit.yaml` |
+> | (new) SPACE microVM sandboxes, evaluation only | `space_enabled` (off), see [SPACE](space.md) | `config.agent-toolkit.yaml` |
 > | `deploy_genai_gateway`, `deploy_guardrails` | `auth_provider: "litellm"` (set by `init agent-toolkit`); `guardrails_enabled` | `global_config.yaml`; `config.agent-toolkit.yaml` |
 > | `deploy_vllm_sr` | `vllm_sr_enabled` | `config.inference.yaml` |
 > | `deploy_kata_containers` | `kata_containers_enabled`, `kata_runtime` | `global_config.yaml` |

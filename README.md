@@ -27,6 +27,7 @@
 > |---|---|---|
 > | `deploy_agent_sandbox`, `deploy_redis`, `deploy_pgvector` | `agent_sandbox_enabled`, `redis_stack_enabled`, `pgvector_enabled` (on) | `config.agent-toolkit.yaml` |
 > | `deploy_openshell`, `deploy_kuberay` | `openshell_enabled`, `kuberay_enabled` (off) | `config.agent-toolkit.yaml` |
+> | (new) SPACE microVM sandboxes, evaluation only | `space_enabled` (off), see [SPACE](docs/space.md) | `config.agent-toolkit.yaml` |
 > | `deploy_genai_gateway`, `deploy_guardrails` | `auth_provider: "litellm"` (set by `init agent-toolkit`); `guardrails_enabled` | `global_config.yaml`; `config.agent-toolkit.yaml` |
 > | `deploy_vllm_sr` | `vllm_sr_enabled` | `config.inference.yaml` |
 > | `deploy_kata_containers` | `kata_containers_enabled`, `kata_runtime` | `global_config.yaml` |
@@ -139,6 +140,8 @@ Enables agents to safely execute code and run arbitrary actions in isolated envi
 **Default provider:** `kubernetes-sigs/agent-sandbox`
 
 **Optional provider:** [NVIDIA OpenShell](docs/openshell.md) — policy-enforced sandboxes on top of Agent Sandbox (egress default-deny, L7 rules, Landlock, credential isolation with GenAI Gateway keys). Enable with `openshell_enabled: true` in `config.agent-toolkit.yaml`.
+
+**Optional provider (evaluation):** [Perplexity SPACE](docs/space.md) — Firecracker microVM sandboxes with suspend/resume to object storage, installed next to Agent Sandbox and independent of it. Enable with `space_enabled: true` in `config.agent-toolkit.yaml`.
 
 ---
 
