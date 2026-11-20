@@ -1,0 +1,100 @@
+# Copyright (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+# Values for upstream infra/space/cluster/install.sh, from its values.example.yaml.
+# Both releases (space, space-builder) read this file.
+{% macro img(name) %}{repository: {{ space_image_prefix }}/{{ name }}, tag: "{{ space_image_tag }}", pullPolicy: IfNotPresent}{% endmacro %}
+global:
+  observability:
+    mode: "off"
+
+spaceNamespaces: [{{ space_namespace }}]
+logs:
+  collection:
+    podTargets:
+      - {path: "/var/log/pods/{{ space_namespace }}_*/*/*.log", namespace: {{ space_namespace }}}
+datadog:
+  hostPeers: []
+nodeLocal:
+  hostPeers: []
+
+x-db: &db
+  secretName: space-postgres
+  rolesSecretName: space-db-roles
+
+x-node: &node
+  objectStore:
+    credentialsSecretName: space-object-store
+    endpoint: {{ space_object_store_endpoint }}
+    region: us-east-1
+
+space-api-local:
+  clusterId: {{ space_cluster_id }}
+  image: {{ img('space-api') }}
+  postgres: *db
+  dataPlanePublicUrl: ""
+  entry:
+    type: ClusterIP
+
+space-internal-api-local:
+  clusterId: {{ space_cluster_id }}
+  image: {{ img('space-worker') }}
+  postgres: *db
+
+space-credmgr-authority-local:
+  clusterId: {{ space_cluster_id }}
+  image: {{ img('space-worker') }}
+  postgres: *db
+  # Static object-store keys (space-object-store): no STS vend role
+  storageCredentials: static
+  # The fixture broker behind its TLS front (evaluation only)
+  keyBroker:
+    url: https://{{ space_key_broker_service }}.{{ space_namespace }}.svc:443
+    tokenSecretName: space-key-broker-token
+    caSecretName: space-key-broker-ca
+    tenantNamespace: "urn:space:{{ space_cluster_id }}:org"
+    grantScheme: "urn:space:{{ space_cluster_id }}:grant:v1"
+
+space-data-plane-local:
+  image: {{ img('space-data-plane') }}
+  entry:
+    type: ClusterIP
+
+space-cluster-controller-local:
+  clusterId: {{ space_cluster_id }}
+  image: {{ img('space-cluster-controller') }}
+  postgres: *db
+  snapshotEndpoint: {{ space_object_store_endpoint }}
+  snapshotRegion: us-east-1
+  snapshotBucket: {{ space_snapshot_bucket }}
+  snapshotCredentialsSecretName: space-object-store
+
+space-sandbox-network-policy:
+  internetExcept: {{ space_internet_except | to_json }}
+
+space-node-manager-local: &node-chart
+  clusterId: {{ space_cluster_id }}
+  image: {{ img('space-worker') }}
+  node: *node
+space-runtime-manager-local: *node-chart
+space-volume-manager-local: *node-chart
+space-credential-manager-local: *node-chart
+space-template-manager-local: *node-chart
+space-sandbox-manager-local:
+  clusterId: {{ space_cluster_id }}
+  image: {{ img('space-worker') }}
+  node: *node
+  snapshots:
+    bucket: {{ space_snapshot_bucket }}
+    region: us-east-1
+    endpoint: {{ space_object_store_endpoint }}
+space-node-ctl-local: *node-chart
+space-node-api-local: *node-chart
+space-build-manager-local:
+  clusterId: {{ space_cluster_id }}
+  image: {{ img('space-worker') }}
+  node: *node
+  objectStore:
+    bucket: {{ space_template_bucket }}
+  egress:
+    denyCidrs: {{ space_internet_except | reject('in', ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']) | list | to_json }}
+    allowCidrs: []

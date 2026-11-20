@@ -43,6 +43,13 @@ components:
     enabled: "{{ openshell_enabled | default(false) | bool }}"
     depends_on: [agent_sandbox]
 
+  # Independent of agent_sandbox: its own namespaces, runtime and API.
+  # Hosts are prepared by the infrastructure layer's space_node.
+  - name: space
+    layer: agent-toolkit
+    enabled: "{{ space_enabled | default(false) | bool }}"
+    depends_on: []
+
   - name: kuberay
     layer: agent-toolkit
     enabled: "{{ kuberay_enabled | default(false) | bool }}"

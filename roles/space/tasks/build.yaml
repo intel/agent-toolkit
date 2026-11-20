@@ -1,0 +1,193 @@
+---
+# Copyright (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+# =============================================================================
+# SPACE — build from source and deliver to the nodes
+# Upstream publishes no images, so space_rev is built on the installer host and
+# imported straight into containerd on the nodes (no registry). Each artifact is
+# built once per tag; a re-run with nothing missing builds nothing.
+# =============================================================================
+
+- name: "space | build | Check Docker on the installer host"
+  ansible.builtin.command: docker info
+  register: _space_docker
+  changed_when: false
+  failed_when: false
+
+- name: "space | build | Fail without Docker"
+  ansible.builtin.fail:
+    msg: >-
+      SPACE has no published images, so the install builds them on this host and
+      needs a running Docker daemon that allows privileged builds (docker info
+      failed: {{ _space_docker.stderr | default('') | trim }}). Install Docker, or set
+      space_enabled: false.
+  when: _space_docker.rc != 0
+
+- name: "space | build | Check out SPACE {{ space_rev }}"
+  ansible.builtin.git:
+    repo: "{{ space_repo_url }}"
+    dest: "{{ space_src_dir }}"
+    version: "{{ space_rev }}"
+    force: true
+  register: _space_src
+  until: _space_src is succeeded
+  retries: 3
+  delay: 15
+
+- name: "space | build | Create the build directories"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0700"
+  loop:
+    - "{{ space_build_dir }}"
+    - "{{ space_build_dir }}/home"
+    - "{{ space_build_dir }}/seed"
+
+- name: "space | build | Find the artifacts already built for {{ space_image_tag }}"
+  ansible.builtin.shell: |
+    set -o pipefail
+    for name in {{ (space_images | map(attribute='name') | list + ['space-seed-publish']) | join(' ') }}; do
+      docker image inspect "{{ space_image_prefix }}/$name:{{ space_image_tag }}" >/dev/null 2>&1 || echo "$name"
+    done
+    [ -x "{{ space_build_dir }}/containerd-shim-space-v2-{{ space_image_tag }}" ] || echo shim
+  args:
+    executable: /bin/bash
+  register: _space_missing
+  changed_when: false
+
+- name: "space | build | Report what will be built"
+  ansible.builtin.debug:
+    msg: >-
+      {{ 'SPACE ' ~ space_image_tag ~ ' is already built.' if _space_missing.stdout_lines | length == 0
+         else 'Building SPACE ' ~ space_image_tag ~ ': ' ~ (_space_missing.stdout_lines | join(', '))
+              ~ '. The first build compiles the Rust workspace and can take an hour or more.' }}
+
+- name: "space | build | Check free disk for the build"
+  ansible.builtin.shell: |
+    set -o pipefail
+    df -BG --output=avail {{ space_build_dir | quote }} | tail -1 | tr -dc '0-9'
+  args:
+    executable: /bin/bash
+  register: _space_free_gb
+  changed_when: false
+  when: _space_missing.stdout_lines | length > 0
+
+- name: "space | build | Fail with too little free disk"
+  ansible.builtin.fail:
+    msg: >-
+      Building SPACE needs about {{ space_build_min_free_gb }} GB free, and
+      {{ space_build_dir }} has {{ _space_free_gb.stdout }} GB. Free space (also
+      under Docker's data root), then re-run.
+  when:
+    - _space_missing.stdout_lines | length > 0
+    - (_space_free_gb.stdout | int) < (space_build_min_free_gb | int)
+
+# Everything below runs only when something is missing
+- name: "space | build | Build"
+  when: _space_missing.stdout_lines | length > 0
+  environment:
+    HOME: "{{ space_build_dir }}/home"   # upstream build state (cargo, the sandbox SSH key) lives under $HOME
+    SPACE_KIND_RUST_BUILD: release      # no test hooks
+    SPACE_KIND_RUST_ARTIFACTS: docker   # self-contained BuildKit build
+    SPACE_VENDOR_ROOT: "{{ space_vendor_dir }}"
+    SPACE_SEED_OUTPUT_DIR: "{{ space_build_dir }}/seed"
+    SPACE_RUST_BUILD_IMAGE: "{{ space_rust_artifact_image }}"
+    DOCKER_BUILDKIT: "1"
+  block:
+    # TODO(spike): confirm the release-mode build outside Tilt
+    - name: "space | build | Build the Rust artifacts"
+      ansible.builtin.command:
+        cmd: bash infra/space/kind/scripts/build-rust-artifacts.sh
+        chdir: "{{ space_src_dir }}"
+      async: 14400
+      poll: 30
+      changed_when: true
+
+    - name: "space | build | Build the service images"
+      ansible.builtin.command:
+        cmd: >-
+          docker build -f {{ item.dockerfile }}
+          --build-arg SPACE_RUST_BUILD_IMAGE={{ space_rust_artifact_image }}
+          --build-arg SPACE_GIT_SHA={{ space_rev }}
+          -t {{ space_image_prefix }}/{{ item.name }}:{{ space_image_tag }} .
+        chdir: "{{ space_src_dir }}"
+      loop: "{{ space_images | selectattr('name', 'in', _space_missing.stdout_lines) | list }}"
+      loop_control:
+        label: "{{ item.name }}"
+      async: 3600
+      poll: 15
+      changed_when: true
+
+    # The seed bakes in the sandbox SSH public key (generated once under $HOME)
+    - name: "space | build | Build the seed template and its publisher image"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        bash infra/space/kind/scripts/build-seed.sh
+        bash infra/space/kind/scripts/build-seed.sh --read-lock -- \
+          docker build -f docker/Dockerfile.seed-publish \
+            -t {{ space_image_prefix }}/space-seed-publish:{{ space_image_tag }} \
+            --build-context seed="$SPACE_SEED_OUTPUT_DIR" .
+      args:
+        chdir: "{{ space_src_dir }}"
+        executable: /bin/bash
+      async: 7200
+      poll: 30
+      changed_when: true
+      when: "'space-seed-publish' in _space_missing.stdout_lines"
+
+    - name: "space | build | Build the containerd shim"
+      ansible.builtin.command:
+        cmd: >-
+          docker run --rm --user {{ lookup('pipe', 'id -u') }}:{{ lookup('pipe', 'id -g') }}
+          -e HOME=/tmp -e GOCACHE=/tmp/go-cache -e GOMODCACHE=/tmp/go-mod
+          -e CGO_ENABLED=0 -e GOOS=linux -e GOARCH=amd64
+          -v {{ space_src_dir }}/shim:/src:ro -v {{ space_build_dir }}:/out -w /src
+          {{ space_go_image }}
+          go build -trimpath -o /out/containerd-shim-space-v2-{{ space_image_tag }} .
+      changed_when: true
+      when: "'shim' in _space_missing.stdout_lines"
+
+- name: "space | build | Save the images for the nodes"
+  ansible.builtin.command:
+    cmd: >-
+      docker save -o {{ space_build_dir }}/images-{{ space_image_tag }}.tar
+      {% for name in space_images | map(attribute='name') | list + ['space-seed-publish'] %}
+      {{ space_image_prefix }}/{{ name }}:{{ space_image_tag }}
+      {% endfor %}
+    creates: "{{ space_build_dir }}/images-{{ space_image_tag }}.tar"
+
+# ── Deliver to the nodes ─────────────────────────────────────────────────────
+
+- name: "space | build | Get the SPACE nodes"
+  kubernetes.core.k8s_info:
+    kind: Node
+    label_selectors:
+      - "{{ space_node_label_key }}={{ space_node_label_value }}"
+  register: _space_nodes
+
+# SPACE runs entirely on the labelled workers. Node names may differ from
+# inventory names; match either, as kata_containers does.
+- name: "space | build | Collect SPACE worker node names"
+  vars:
+    _labels: "{{ item.metadata.labels | default({}) }}"
+  ansible.builtin.set_fact:
+    _space_worker_names: >-
+      {{ (_space_worker_names | default([]))
+         + [item.metadata.name, _labels['kubernetes.io/hostname'] | default(item.metadata.name)] }}
+  loop: "{{ _space_nodes.resources }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+  when: space_node_label_key in _labels
+
+- name: "space | build | Map SPACE workers to inventory hosts"
+  ansible.builtin.set_fact:
+    _space_worker_hosts: >-
+      {{ (groups['kube_control_plane'] | default([])) | union(groups['kube_node'] | default([]))
+         | select('in', _space_worker_names | default([])) | list }}
+
+- name: "space | build | Import the images into containerd on each node"
+  ansible.builtin.include_tasks: deliver.yaml
+  loop: "{{ _space_worker_hosts }}"
+  loop_control:
+    loop_var: space_host

@@ -1,0 +1,65 @@
+---
+# Copyright (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+# =============================================================================
+# SPACE — deliver the images and the shim to one SPACE worker: space_host
+# =============================================================================
+
+- name: "space | {{ space_host }} | Deliver the build"
+  become: true
+  delegate_to: "{{ space_host }}"
+  environment:
+    PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  block:
+    - name: "space | {{ space_host }} | Find SPACE images missing from containerd"
+      ansible.builtin.shell: |
+        set -o pipefail
+        have=$(ctr -n k8s.io images ls -q)
+        for name in {{ (space_images | map(attribute='name') | list + ['space-seed-publish']) | join(' ') }}; do
+          grep -qxF "{{ space_image_prefix }}/$name:{{ space_image_tag }}" <<<"$have" || echo "$name"
+        done
+      args:
+        executable: /bin/bash
+      register: _space_node_missing
+      changed_when: false
+
+    - name: "space | {{ space_host }} | Import the SPACE images"
+      when: _space_node_missing.stdout_lines | length > 0
+      block:
+        - name: "space | {{ space_host }} | Copy the image archive"
+          ansible.builtin.copy:
+            src: "{{ space_build_dir }}/images-{{ space_image_tag }}.tar"
+            dest: "/var/tmp/space-images-{{ space_image_tag }}.tar"
+            mode: "0600"
+
+        - name: "space | {{ space_host }} | Import into containerd"
+          ansible.builtin.command: ctr -n k8s.io images import /var/tmp/space-images-{{ space_image_tag }}.tar
+          changed_when: true
+
+      always:
+        - name: "space | {{ space_host }} | Remove the image archive"
+          ansible.builtin.file:
+            path: "/var/tmp/space-images-{{ space_image_tag }}.tar"
+            state: absent
+
+    - name: "space | {{ space_host }} | Install the containerd shim"
+      block:
+        - name: "space | {{ space_host }} | Copy the shim and its installer"
+          ansible.builtin.copy:
+            src: "{{ item.src }}"
+            dest: "{{ item.dest }}"
+            mode: "0755"
+          loop:
+            - {src: "{{ space_build_dir }}/containerd-shim-space-v2-{{ space_image_tag }}", dest: "/var/tmp/containerd-shim-space-v2"}
+            - {src: "{{ space_src_dir }}/infra/space/cluster/install-shim.sh", dest: "/var/tmp/space-install-shim.sh"}
+          loop_control:
+            label: "{{ item.dest }}"
+          register: _space_shim_copy
+
+        # Never restarts containerd; running sandboxes keep their shim
+        - name: "space | {{ space_host }} | Install the shim"  # noqa: no-handler
+          ansible.builtin.command: >-
+            bash /var/tmp/space-install-shim.sh --binary /var/tmp/containerd-shim-space-v2
+            --version {{ space_image_tag }}
+          when: _space_shim_copy is changed
+          changed_when: true

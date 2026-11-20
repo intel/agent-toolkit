@@ -1,0 +1,43 @@
+---
+# Copyright (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+# =============================================================================
+# SPACE — Teardown
+# The SPACE database and buckets stay, as for other platform consumers; the
+# build cache under space_src_dir stays on the installer host.
+# =============================================================================
+
+- name: "space | teardown | Remove the Helm releases"
+  kubernetes.core.helm:
+    name: "{{ item }}"
+    release_namespace: "{{ space_namespace }}"
+    state: absent
+    wait: true
+  loop: [space-builder, space, space-key-broker]
+  failed_when: false
+
+- name: "space | teardown | Remove the mesh exception on the object store"
+  kubernetes.core.k8s:
+    state: absent
+    api_version: security.istio.io/v1
+    kind: PeerAuthentication
+    name: space-node-s3
+    namespace: "{{ object_store_namespace | default('monitoring') }}"
+  failed_when: false
+
+- name: "space | teardown | Delete the SPACE namespaces"
+  kubernetes.core.k8s:
+    state: absent
+    kind: Namespace
+    name: "{{ item }}"
+    wait: true
+    wait_timeout: 300
+  loop:
+    - "{{ space_sandbox_namespace }}"
+    - "{{ space_namespace }}"
+    - space-observability
+  failed_when: false
+
+- name: "space | teardown | Complete"
+  ansible.builtin.debug:
+    msg: "SPACE removed (namespaces {{ space_namespace }}, {{ space_sandbox_namespace }}, space-observability)"

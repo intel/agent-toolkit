@@ -61,7 +61,18 @@ openshell_oidc_issuer: ""   # OIDC login (e.g. a Keycloak realm URL); empty = si
 # Sandboxes run outside the Istio mesh, so with OpenShell on the inference layer's
 # LiteLLM admits them from the pod network on its API port; they still use the minted
 # virtual key. On a bring-your-own cluster, also set kubernetes_cluster_cidr to its pod CIDR.
-litellm_allow_pod_network: "{{ openshell_enabled | bool }}"
+litellm_allow_pod_network: "{{ openshell_enabled | bool or space_enabled | bool }}"
+
+# --- SPACE (optional — disabled by default; evaluation only, see docs/space.md) ---
+# Firecracker microVM sandboxes from perplexityai/SPACE, next to Agent Sandbox.
+# Needs KVM workers; the install builds SPACE from source on the installer host
+# (Docker, ~40 GB free disk, a long first build). Upstream has no releases yet,
+# so it is pinned to a commit.
+space_enabled: false
+space_rev: "a08174bc17a9b8205691ec7d8fe7ba1f90ee3f97"
+space_src_dir: "{{ lookup('env', 'HOME') }}/.cache/ai-solutions/space/src"
+space_namespace: "space"                 # fixed: the upstream charts and TLS names use this namespace
+space_sandbox_namespace: "sandboxes"     # fixed: the upstream sandbox NetworkPolicy uses this namespace
 
 # --- KubeRay (optional — disabled by default) ---
 kuberay_enabled: false

@@ -1,0 +1,156 @@
+---
+# Copyright (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+# =============================================================================
+# SPACE — Install (evaluation)
+# Hosts are prepared by enterprise-ai-solutions' space_node (infrastructure
+# layer). This role builds SPACE at space_rev, supplies the Secrets and TLS the
+# upstream cluster install needs, and runs infra/space/cluster/install.sh.
+# =============================================================================
+
+- name: "space | Check the space RuntimeClass and SPACE nodes"
+  kubernetes.core.k8s_info:
+    api_version: node.k8s.io/v1
+    kind: RuntimeClass
+    name: space
+  register: _space_rc
+
+- name: "space | Check SPACE worker nodes"
+  kubernetes.core.k8s_info:
+    kind: Node
+    label_selectors:
+      - "{{ space_node_label_key }}={{ space_node_label_value }}"
+  register: _space_workers
+
+- name: "space | Fail when the nodes are not prepared"
+  ansible.builtin.fail:
+    msg: >-
+      SPACE needs nodes prepared by the space_node component (infrastructure layer):
+      {{ 'RuntimeClass space is missing' if _space_rc.resources | length == 0
+         else 'no node is labelled ' ~ space_node_label_key ~ '=' ~ space_node_label_value }}.
+      Run ./es_auto_installer.sh install space_node (it runs when space_enabled: true
+      is set in config.agent-toolkit.yaml), then re-run.
+  when: _space_rc.resources | length == 0 or _space_workers.resources | length == 0
+
+- name: "space | Build and deliver SPACE {{ space_rev[:12] }}"
+  ansible.builtin.include_tasks: build.yaml
+
+# ── Namespaces and mesh ──────────────────────────────────────────────────────
+# The control plane joins the ambient mesh to reach Postgres and the object
+# store; PERMISSIVE admits the host-network node services and the sandboxes,
+# which stay outside it. Sandbox pods run in their own unlabelled namespace.
+
+- name: "space | Create namespaces"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ item.name }}"
+        labels: "{{ item.labels }}"
+  loop:
+    - name: "{{ space_namespace }}"
+      labels: "{{ {'istio.io/dataplane-mode': 'ambient'} if istio_enabled | default(false) | bool else {} }}"
+    - {name: "{{ space_sandbox_namespace }}", labels: {}}
+    - {name: space-observability, labels: {}}
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: "space | Admit callers from outside the mesh"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: security.istio.io/v1
+      kind: PeerAuthentication
+      metadata: "{{ item.metadata }}"
+      spec: "{{ item.spec }}"
+  loop:
+    - metadata: {name: default, namespace: "{{ space_namespace }}"}
+      spec: {mtls: {mode: PERMISSIVE}}
+    # Node services (host network) read and write sandbox templates and snapshots
+    # TODO(spike): confirm the SeaweedFS S3 pod labels
+    - metadata: {name: space-node-s3, namespace: "{{ object_store_namespace | default('monitoring') }}"}
+      spec:
+        selector:
+          matchLabels: {app.kubernetes.io/component: s3}
+        mtls: {mode: STRICT}
+        portLevelMtls: "{{ {(seaweedfs_s3_port | default(8333)) | string: {'mode': 'PERMISSIVE'}} }}"
+  loop_control:
+    label: "{{ item.metadata.namespace }}/{{ item.metadata.name }}"
+  when: istio_enabled | default(false) | bool
+
+- name: "space | Secrets and TLS"
+  ansible.builtin.include_tasks: secrets.yaml
+
+# ── Fixture key broker (evaluation only) ─────────────────────────────────────
+
+- name: "space | Read the key broker token"
+  kubernetes.core.k8s_info:
+    kind: Secret
+    name: space-key-broker-token
+    namespace: "{{ space_namespace }}"
+  register: _space_broker_token
+  no_log: true
+
+- name: "space | Install the fixture key broker"
+  kubernetes.core.helm:
+    name: space-key-broker
+    chart_ref: "{{ space_src_dir }}/infra/space/kind/charts/space-kind-key-broker"
+    release_namespace: "{{ space_namespace }}"
+    values:
+      image: {repository: "{{ space_image_prefix }}/space-kind-key-broker", tag: "{{ space_image_tag }}", pullPolicy: IfNotPresent}
+      service: {name: "{{ space_key_broker_fixture_service }}", port: 50051}
+      token:
+        secretName: space-key-broker-fixture-token
+        value: "{{ _space_broker_token.resources[0].data.token | b64decode }}"
+    wait: true
+    timeout: 5m0s
+  no_log: true
+
+- name: "space | Front the key broker with TLS"
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ item }}"
+    wait: true
+  loop: "{{ lookup('template', 'key-broker-tls.yaml.j2') | from_yaml_all | select | list }}"
+  loop_control:
+    label: "{{ item.kind }}/{{ item.metadata.name }}"
+
+# ── SPACE ────────────────────────────────────────────────────────────────────
+
+- name: "space | Render the install values"
+  ansible.builtin.template:
+    src: values.yaml.j2
+    dest: "{{ space_build_dir }}/values.yaml"
+    mode: "0600"
+
+- name: "space | Read the current kube context"
+  ansible.builtin.command: kubectl config current-context
+  register: _space_kube_context
+  changed_when: false
+
+# Checks its prerequisites, runs the migrate Job, then the space and space-builder releases
+- name: "space | Run the upstream cluster install"
+  ansible.builtin.command:
+    cmd: >-
+      bash infra/space/cluster/install.sh -f {{ space_build_dir }}/values.yaml
+      --kube-context {{ _space_kube_context.stdout }} --namespace {{ space_namespace }}
+      --timeout {{ space_install_timeout }}
+    chdir: "{{ space_src_dir }}"
+  register: _space_install
+  changed_when: true
+
+- name: "space | Seed template and API key"
+  ansible.builtin.include_tasks: seed.yaml
+
+- name: "space | Deployment summary"
+  ansible.builtin.debug:
+    msg:
+      - "============================================================"
+      - "  SPACE {{ space_rev[:12] }} deployed (EVALUATION ONLY: fixture key broker)"
+      - "  Namespaces : {{ space_namespace }} (control plane), {{ space_sandbox_namespace }} (sandboxes)"
+      - "  Workers    : {{ _space_workers.resources | map(attribute='metadata.name') | join(', ') }}"
+      - "  API (E2B)  : svc/space-api in {{ space_namespace }}, key in Secret space-api-key"
+      - "  Verify     : kubectl get pods -n {{ space_namespace }}; see docs/space.md"
+      - "============================================================"

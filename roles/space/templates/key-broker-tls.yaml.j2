@@ -1,0 +1,114 @@
+# Copyright (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+# TLS front for the upstream fixture key broker. The credential-manager authority
+# requires an https broker; the fixture speaks plaintext gRPC only. Evaluation
+# only: the fixture derives every key from the tenant reference, so they protect nothing.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ space_key_broker_service }}-envoy
+  namespace: {{ space_namespace }}
+data:
+  envoy.yaml: |
+    static_resources:
+      listeners:
+        - name: tls
+          address: {socket_address: {address: 0.0.0.0, port_value: 8443}}
+          filter_chains:
+            - transport_socket:
+                name: envoy.transport_sockets.tls
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+                  common_tls_context:
+                    alpn_protocols: [h2]
+                    tls_certificates:
+                      - certificate_chain: {filename: /etc/tls/tls.crt}
+                        private_key: {filename: /etc/tls/tls.key}
+              filters:
+                - name: envoy.filters.network.http_connection_manager
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                    stat_prefix: key_broker
+                    codec_type: HTTP2
+                    route_config:
+                      virtual_hosts:
+                        - name: broker
+                          domains: ["*"]
+                          routes:
+                            - match: {prefix: /}
+                              route: {cluster: fixture, timeout: 30s}
+                    http_filters:
+                      - name: envoy.filters.http.router
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+      clusters:
+        - name: fixture
+          type: STRICT_DNS
+          connect_timeout: 5s
+          typed_extension_protocol_options:
+            envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+              "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+              explicit_http_config: {http2_protocol_options: {}}
+          load_assignment:
+            cluster_name: fixture
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address: {address: {{ space_key_broker_fixture_service }}, port_value: 50051}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ space_key_broker_service }}
+  namespace: {{ space_namespace }}
+  labels: {app.kubernetes.io/name: {{ space_key_broker_service }}, app.kubernetes.io/part-of: space}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: {{ space_key_broker_service }}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: {{ space_key_broker_service }}}
+    spec:
+      nodeSelector: {"{{ space_infra_label_key }}": "true"}
+      priorityClassName: space-control-plane
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: envoy
+          image: {{ space_key_broker_envoy_image }}
+          args: [-c, /etc/envoy/envoy.yaml, --log-level, warn]
+          ports:
+            - {name: https, containerPort: 8443}
+          readinessProbe:
+            tcpSocket: {port: https}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          volumeMounts:
+            - {name: config, mountPath: /etc/envoy, readOnly: true}
+            - {name: tls, mountPath: /etc/tls, readOnly: true}
+      volumes:
+        - name: config
+          configMap: {name: {{ space_key_broker_service }}-envoy}
+        - name: tls
+          secret: {secretName: space-key-broker-tls}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ space_key_broker_service }}
+  namespace: {{ space_namespace }}
+spec:
+  selector: {app.kubernetes.io/name: {{ space_key_broker_service }}}
+  ports:
+    - {name: https, port: 443, targetPort: https, appProtocol: https}

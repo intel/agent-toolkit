@@ -1,0 +1,115 @@
+---
+# Copyright (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+# =============================================================================
+# SPACE — publish the seed template and mint the agents' API key
+# Neither is part of the upstream cluster install.
+# =============================================================================
+
+# Rendered as release "space", as the Kind harness does: the internal API admits
+# its ServiceAccount (space-template-publish) by that name.
+- name: "space | seed | Render the seed publish Job"
+  ansible.builtin.command:
+    cmd: >-
+      helm template space infra/space/kind/charts/space-seed-publish --namespace {{ space_namespace }}
+      --set-string image.repository={{ space_image_prefix }}/space-seed-publish
+      --set-string image.tag={{ space_image_tag }}
+      --set-string s3.endpoint={{ space_object_store_endpoint }}
+      --set-string s3.bucket={{ space_template_bucket }}
+      --set-string s3.credentialsSecretName=space-object-store
+    chdir: "{{ space_src_dir }}"
+  register: _space_seed_manifest
+  changed_when: false
+
+- name: "space | seed | Check the seed publish Job"
+  kubernetes.core.k8s_info:
+    api_version: batch/v1
+    kind: Job
+    name: space-seed-publish
+    namespace: "{{ space_namespace }}"
+  register: _space_seed_job
+
+# A Job's pod template is immutable: replace it only for a new build
+- name: "space | seed | Remove a seed publish Job from another build"
+  kubernetes.core.k8s:
+    state: absent
+    api_version: batch/v1
+    kind: Job
+    name: space-seed-publish
+    namespace: "{{ space_namespace }}"
+    delete_options: {propagationPolicy: Foreground}
+    wait: true
+  when: >-
+    _space_seed_job.resources | length > 0 and
+    (_space_seed_job.resources[0].spec.template.spec.containers[0].image | default(''))
+      != space_image_prefix ~ '/space-seed-publish:' ~ space_image_tag
+
+- name: "space | seed | Publish the seed template"
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ item }}"
+  loop: "{{ _space_seed_manifest.stdout | from_yaml_all | select | list }}"
+  loop_control:
+    label: "{{ item.kind }}/{{ item.metadata.name }}"
+
+- name: "space | seed | Wait for the seed to be published"
+  ansible.builtin.command: >-
+    kubectl -n {{ space_namespace }} wait job/space-seed-publish
+    --for=condition=Complete --timeout=900s
+  changed_when: false
+
+# ── API key for agents (Secret space-api-key, native API) ────────────────────
+
+- name: "space | seed | Check for the agents' API key"
+  kubernetes.core.k8s_info:
+    kind: Secret
+    name: space-api-key
+    namespace: "{{ space_namespace }}"
+  register: _space_api_key
+  no_log: true
+
+- name: "space | seed | Mint the agents' API key"
+  when: _space_api_key.resources | length == 0
+  block:
+    - name: "space | seed | Generate the token and its insert SQL"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        umask 077
+        token_file=$(mktemp)
+        trap 'rm -f "$token_file"' EXIT
+        openssl rand -hex 32 | tr -d '\n' > "$token_file"
+        sql=$(bash scripts/seed-api-key.sh --surface native --token-file "$token_file" \
+          --bootstrap-org {{ space_api_key_org | quote }} --bootstrap-org-name "Intel AI Solutions" \
+          --bootstrap-user {{ space_api_key_user | quote }} --name agents \
+          | awk 'f { print } /control-plane DB:$/ { f = 1 }')
+        jq -n --rawfile token "$token_file" --arg sql "$sql" '{token: $token, sql: $sql}'
+      args:
+        chdir: "{{ space_src_dir }}"
+        executable: /bin/bash
+      register: _space_key
+      changed_when: true
+      no_log: true
+
+    - name: "space | seed | Insert the key into the SPACE database"
+      ansible.builtin.command:
+        cmd: >-
+          kubectl exec -i -n {{ postgresql_namespace | default('postgresql') }}
+          {{ postgresql_cluster_name | default('postgresql') }}-1 -c postgres --
+          psql -U postgres -d space -v ON_ERROR_STOP=1
+        stdin: "{{ (_space_key.stdout | from_json).sql }}"
+      changed_when: true
+      no_log: true
+
+    - name: "space | seed | Store the agents' API key"
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata: {name: space-api-key, namespace: "{{ space_namespace }}"}
+          type: Opaque
+          stringData:
+            SPACE_API_TOKEN: "{{ (_space_key.stdout | from_json).token }}"
+            SPACE_API_URL: "http://space-api-entry.{{ space_namespace }}.svc.cluster.local:8080"
+            SPACE_DATA_PLANE_URL: "http://space-data-plane-entry.{{ space_namespace }}.svc.cluster.local:8090"
+      no_log: true

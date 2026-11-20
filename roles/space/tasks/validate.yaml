@@ -1,0 +1,77 @@
+---
+# Copyright (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+# =============================================================================
+# SPACE — Validate
+# =============================================================================
+
+- name: "space | validate | Get SPACE Deployments and DaemonSets"
+  kubernetes.core.k8s_info:
+    kind: "{{ item }}"
+    api_version: apps/v1
+    namespace: "{{ space_namespace }}"
+  loop: [Deployment, DaemonSet]
+  register: _val_space_workloads
+
+- name: "space | validate | Fail when SPACE is not installed"
+  ansible.builtin.fail:
+    msg: >-
+      space_enabled is set but namespace {{ space_namespace }} has no SPACE Deployments.
+      Run the space install: it stops with the cause when a prerequisite is missing.
+  when: _val_space_workloads.results[0].resources | default([]) | length == 0
+
+- name: "space | validate | Check every Deployment is available"
+  ansible.builtin.command: >-
+    kubectl -n {{ space_namespace }} rollout status deployment/{{ item.metadata.name }} --timeout=120s
+  loop: "{{ _val_space_workloads.results[0].resources }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+  changed_when: false
+
+# DaemonSets with no matching node (the builder pool) have nothing to roll out
+- name: "space | validate | Check every scheduled DaemonSet is ready"
+  ansible.builtin.assert:
+    that: (item.status.numberReady | default(0)) == (item.status.desiredNumberScheduled | default(0))
+    fail_msg: >-
+      DaemonSet {{ item.metadata.name }}: {{ item.status.numberReady | default(0) }} of
+      {{ item.status.desiredNumberScheduled | default(0) }} ready
+    quiet: true
+  loop: "{{ _val_space_workloads.results[1].resources }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+
+- name: "space | validate | Read the agents' API key"
+  kubernetes.core.k8s_info:
+    kind: Secret
+    name: space-api-key
+    namespace: "{{ space_namespace }}"
+  register: _val_space_key
+  no_log: true
+
+# Upstream's standard-library walkthrough: create a sandbox, run a command, delete it
+- name: "space | validate | Create a sandbox, run a command and delete it"
+  ansible.builtin.shell: |
+    set -euo pipefail
+    kubectl -n {{ space_namespace }} port-forward svc/space-api-entry 18080:8080 >/dev/null 2>&1 &
+    api=$!
+    kubectl -n {{ space_namespace }} port-forward svc/space-data-plane-entry 18090:8090 >/dev/null 2>&1 &
+    dp=$!
+    trap 'kill $api $dp 2>/dev/null || true' EXIT
+    sleep 3
+    export SPACE_API_URL=http://127.0.0.1:18080 SPACE_DATA_PLANE_URL=http://127.0.0.1:18090
+    export SPACE_API_TOKEN={{ _val_space_key.resources[0].data.SPACE_API_TOKEN | b64decode | quote }}
+    echo y | python3 examples/first_sandbox.py
+  args:
+    chdir: "{{ space_src_dir }}"
+    executable: /bin/bash
+  register: _val_space_smoke
+  changed_when: false
+  failed_when: _val_space_smoke.rc != 0 or 'Hello from SPACE' not in _val_space_smoke.stdout
+  no_log: "{{ secure_logs | default(true) }}"
+
+- name: "space | validate | Summary"
+  ansible.builtin.debug:
+    msg: >-
+      SPACE: {{ _val_space_workloads.results[0].resources | length }} Deployments available,
+      {{ _val_space_workloads.results[1].resources | length }} DaemonSets ready, sandbox
+      create/exec/delete passed

@@ -1,0 +1,82 @@
+# Copyright (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+# SPACE internal TLS, as infra/space/kind/scripts/internal-rpc-tls.sh issues it:
+# ECDSA P-256 PKCS#8 keys, a ten-year CA and one-year leaves with short service
+# names only, and a self-signed credential-manager certificate.
+{% set ns = space_namespace %}
+{% set leaves = [
+  {'secret': 'space-cluster-api-tls', 'cn': 'space-cluster-api', 'dns': ['space-internal-api', 'space-cluster-api']},
+  {'secret': 'space-node-api-tls', 'cn': 'space-node-api', 'dns': ['space-node-api']},
+  {'secret': 'space-build-manager-tls', 'cn': 'space-build-manager', 'dns': ['space-builder-build-manager']},
+  {'secret': 'space-ingress-activation-tls', 'cn': 'space-ingress-activation', 'dns': ['space-api']},
+  {'secret': 'space-key-broker-tls', 'cn': space_key_broker_service,
+   'dns': [space_key_broker_service, space_key_broker_service ~ '.' ~ ns, space_key_broker_service ~ '.' ~ ns ~ '.svc',
+           space_key_broker_service ~ '.' ~ ns ~ '.svc.cluster.local']},
+] %}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: space-selfsigned
+  namespace: {{ ns }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: space-internal-rpc-ca
+  namespace: {{ ns }}
+  labels: {app.kubernetes.io/part-of: space}
+spec:
+  secretName: space-internal-rpc-ca-signing
+  commonName: space-internal-rpc-ca
+  isCA: true
+  duration: 87600h
+  privateKey: {algorithm: ECDSA, size: 256, encoding: PKCS8}
+  issuerRef: {name: space-selfsigned, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: space-internal-rpc-ca
+  namespace: {{ ns }}
+spec:
+  ca:
+    secretName: space-internal-rpc-ca-signing
+{% for leaf in leaves %}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ leaf.secret }}
+  namespace: {{ ns }}
+  labels: {app.kubernetes.io/part-of: space}
+spec:
+  secretName: {{ leaf.secret }}
+  commonName: {{ leaf.cn }}
+  dnsNames: {{ leaf.dns | to_json }}
+  duration: 8760h
+  renewBefore: 1440h
+  usages: [digital signature, server auth]
+  privateKey: {algorithm: ECDSA, size: 256, encoding: PKCS8}
+  issuerRef: {name: space-internal-rpc-ca, kind: Issuer}
+{% endfor %}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: space-credmgr-authority-tls
+  namespace: {{ ns }}
+  labels: {app.kubernetes.io/part-of: space}
+spec:
+  secretName: space-credmgr-authority-tls
+  commonName: space-credmgr-authority
+  dnsNames:
+    - space-credmgr-authority
+    - space-credmgr-authority.{{ ns }}
+    - space-credmgr-authority.{{ ns }}.svc
+    - space-credmgr-authority.{{ ns }}.svc.cluster.local
+  duration: 87600h
+  usages: [digital signature, server auth]
+  privateKey: {algorithm: ECDSA, size: 256, encoding: PKCS8}
+  issuerRef: {name: space-selfsigned, kind: Issuer}
