@@ -55,4 +55,12 @@ space_internet_except:
 space_api_key_org: "ai-solutions"
 space_api_key_user: "agents@{{ base_domain_name | default('ai-solutions.local') }}"
 
+# Public API and data plane on the platform gateway (https, *.<base_domain_name>).
+# Skipped when the gateway is not installed. Every call still needs the API key.
+space_public_enabled: true
+space_api_hostname: "space.{{ base_domain_name | default('example.com') }}"
+space_data_plane_hostname: "space-dp.{{ base_domain_name | default('example.com') }}"
+space_api_route_timeout: "300s"
+space_data_plane_route_timeout: "0s"   # no limit: command output and sessions stream
+
 space_install_timeout: "900s"

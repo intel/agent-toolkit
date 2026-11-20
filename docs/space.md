@@ -90,14 +90,38 @@ Agents use the native REST API with the minted key:
 kubectl -n space get secret space-api-key -o jsonpath='{.data.SPACE_API_TOKEN}' | base64 -d
 ```
 
-The Secret also holds `SPACE_API_URL` and `SPACE_DATA_PLANE_URL`:
+The Secret also holds the URLs:
 
-| | In-cluster URL |
-|---|---|
-| API | `http://space-api-entry.space.svc.cluster.local:8080` |
-| Data plane | `http://space-data-plane-entry.space.svc.cluster.local:8090` |
+| | In-cluster (`SPACE_API_URL`, `SPACE_DATA_PLANE_URL`) | Public, on the platform gateway (`SPACE_API_PUBLIC_URL`, `SPACE_DATA_PLANE_PUBLIC_URL`) |
+|---|---|---|
+| API | `http://space-api-entry.space.svc.cluster.local:8080` | `https://space.<base_domain_name>` |
+| Data plane | `http://space-data-plane-entry.space.svc.cluster.local:8090` | `https://space-dp.<base_domain_name>` |
 
-From a workstation, port-forward both Services and run upstream's walkthrough.
+The public routes are published like other components' subdomains: HTTPRoutes
+on the platform gateway's `https` listener, using the gateway's TLS and the
+`*.<base_domain_name>` DNS. They are added only when the gateway is installed.
+The routes add no auth of their own: every SPACE call needs the API key. The
+API gives clients the public data-plane URL for command streams and files, so
+remote clients need only the two hostnames.
+
+| Setting | Default | Description |
+|---|---|---|
+| `space_public_enabled` | `true` | Publish the two routes. Set `false` to keep SPACE in-cluster only. |
+| `space_api_hostname` | `space.<base_domain_name>` | API hostname |
+| `space_data_plane_hostname` | `space-dp.<base_domain_name>` | Data-plane hostname |
+| `space_data_plane_route_timeout` | `0s` | No request timeout, because streams stay open |
+
+With the gateway in place, run the walkthrough from any machine that resolves the domain:
+
+```bash
+export SPACE_API_URL=https://space.<base_domain_name> SPACE_DATA_PLANE_URL=https://space-dp.<base_domain_name>
+export SPACE_API_TOKEN=$(kubectl -n space get secret space-api-key -o jsonpath='{.data.SPACE_API_TOKEN}' | base64 -d)
+python3 ~/.cache/ai-solutions/space/src/examples/first_sandbox.py
+```
+
+With the default self-signed gateway CA, the client must trust that CA.
+
+Without the gateway, port-forward both Services and run upstream's walkthrough.
 It creates a sandbox from `seed:latest`, runs a command and offers to delete
 the sandbox:
 

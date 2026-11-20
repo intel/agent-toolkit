@@ -113,3 +113,15 @@
             SPACE_API_URL: "http://space-api-entry.{{ space_namespace }}.svc.cluster.local:8080"
             SPACE_DATA_PLANE_URL: "http://space-data-plane-entry.{{ space_namespace }}.svc.cluster.local:8090"
       no_log: true
+
+# Kept current on every run, so turning the routes on or off updates them
+- name: "space | seed | Record the public URLs with the API key"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata: {name: space-api-key, namespace: "{{ space_namespace }}"}
+      stringData:
+        SPACE_API_PUBLIC_URL: "{{ ('https://' ~ space_api_hostname) if _space_public | bool else '' }}"
+        SPACE_DATA_PLANE_PUBLIC_URL: "{{ ('https://' ~ space_data_plane_hostname) if _space_public | bool else '' }}"

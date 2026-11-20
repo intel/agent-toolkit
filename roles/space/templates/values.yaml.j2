@@ -31,7 +31,8 @@ space-api-local:
   clusterId: {{ space_cluster_id }}
   image: {{ img('space-api') }}
   postgres: *db
-  dataPlanePublicUrl: ""
+  # Data-plane origin the API gives clients for command streams and files
+  dataPlanePublicUrl: "{{ ('https://' ~ space_data_plane_hostname) if _space_public | default(false) | bool else '' }}"
   entry:
     type: ClusterIP
 

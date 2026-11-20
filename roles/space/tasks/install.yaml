@@ -119,6 +119,20 @@
 
 # ── SPACE ────────────────────────────────────────────────────────────────────
 
+- name: "space | Check for the platform gateway"
+  kubernetes.core.k8s_info:
+    api_version: gateway.networking.k8s.io/v1
+    kind: Gateway
+    name: "{{ gateway_name | default('eg-gateway') }}"
+    namespace: "{{ gateway_namespace | default('envoy-gateway-system') }}"
+  register: _space_gateway
+  when: space_public_enabled | bool
+
+# The API hands clients this data-plane origin for command streams and files
+- name: "space | Decide whether to publish SPACE on the gateway"
+  ansible.builtin.set_fact:
+    _space_public: "{{ space_public_enabled | bool and (_space_gateway.resources | default([]) | length > 0) }}"
+
 - name: "space | Render the install values"
   ansible.builtin.template:
     src: values.yaml.j2
@@ -141,6 +155,26 @@
   register: _space_install
   changed_when: true
 
+- name: "space | Publish the API and data plane on the gateway"
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ item }}"
+  loop: "{{ lookup('template', 'routes.yaml.j2') | from_yaml_all | select | list }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+  when: _space_public | bool
+
+- name: "space | Remove the gateway routes when publishing is off"
+  kubernetes.core.k8s:
+    state: absent
+    api_version: gateway.networking.k8s.io/v1
+    kind: HTTPRoute
+    name: "{{ item }}"
+    namespace: "{{ space_namespace }}"
+  loop: [space-api, space-data-plane]
+  when: not _space_public | bool
+  failed_when: false
+
 - name: "space | Seed template and API key"
   ansible.builtin.include_tasks: seed.yaml
 
@@ -151,6 +185,8 @@
       - "  SPACE {{ space_rev[:12] }} deployed (EVALUATION ONLY: fixture key broker)"
       - "  Namespaces : {{ space_namespace }} (control plane), {{ space_sandbox_namespace }} (sandboxes)"
       - "  Workers    : {{ _space_workers.resources | map(attribute='metadata.name') | join(', ') }}"
-      - "  API (E2B)  : svc/space-api in {{ space_namespace }}, key in Secret space-api-key"
+      - "  API        : {{ ('https://' ~ space_api_hostname) if _space_public | bool else 'svc/space-api-entry:8080 (in-cluster)' }}"
+      - "  Data plane : {{ ('https://' ~ space_data_plane_hostname) if _space_public | bool else 'svc/space-data-plane-entry:8090 (in-cluster)' }}"
+      - "  API key    : Secret space-api-key in {{ space_namespace }}"
       - "  Verify     : kubectl get pods -n {{ space_namespace }}; see docs/space.md"
       - "============================================================"
