@@ -3,7 +3,7 @@
 > **Evaluation only.** SPACE has no upstream releases or published images, and
 > this integration uses the upstream *fixture* key broker, whose keys protect
 > nothing: sandbox data at rest is not really encrypted. Do not put sensitive
-> data in SPACE sandboxes. See [SPACE integration gaps](space-integration-gaps.md).
+> data in SPACE sandboxes.
 
 [perplexityai/SPACE](https://github.com/perplexityai/SPACE) runs agent code in
 Firecracker microVMs. Each sandbox has its own guest kernel and can be
