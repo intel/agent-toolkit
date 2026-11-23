@@ -12,7 +12,7 @@ The agent layer of **Toolkit Manager** (`intel/enterprise-ai-solutions`). It is 
 | `config.yaml` | Defaults. `init agent-toolkit` copies it to `env/<env>/config.agent-toolkit.yaml`, which is the file to edit |
 | `roles/<component>/` | Ansible roles; each has `install`, `teardown` and `validate` task files |
 | `charts/` | Helm charts the roles install |
-| `playbooks/preflight-check.yml` | Node readiness report. It runs at the start of `install` on the release track only. |
+| `playbooks/preflight-check.yml` | Node readiness report. It runs at the start of `install` (off with `node_preflight_enabled: false`). A main-track checkout older than Toolkit Manager commit `098b621` (16 Nov 2026) does not run it. |
 | `docs/` | User documentation (some pages disagree with the code; see `agent-toolkit-troubleshoot`) |
 | `docker/` | A Docker Compose variant, not covered here |
 
@@ -43,16 +43,20 @@ Run every `./es_auto_installer.sh` and `./model-manager` command from the Toolki
 
 ## Which track the installation is on
 
-The toolkit code is the same on both tracks, but the Toolkit Manager and inference layer around it differ. Check before giving instructions:
-- `git -C <root> branch --show-current`
-- `ls <root>/playbooks/includes/agent_toolkit_preflight.yaml` (exists only on the release track)
+The toolkit code is the same on both tracks, but the Toolkit Manager and inference layer around it differ. The track is the Toolkit Manager branch the checkout is built on. Do not judge it by files (they get copied between branches) or by the branch name (it can be detached or renamed). Ask git which branch is closest (read-only, no fetch):
+
+```bash
+for b in $(git -C <root> for-each-ref --format='%(refname:short)' 'refs/remotes/*/main' 'refs/remotes/*/release-*'); do
+  echo "$(git -C <root> rev-list --count "$b..HEAD") $b"; done | sort -n | head -3
+```
+
+The first line (fewest commits) is the track: `.../main` is the main track, `.../release-1.2` the release track. Older branches such as `release-1.1` are not covered here; tell the user. If the top two lines show the same number, or the command fails (no git history), ask the user which branch they cloned.
 
 | | Main track (Toolkit Manager `main`) | Release track (Toolkit Manager `release-1.2`) |
 |---|---|---|
 | API access switch | `auth_type: litellm_vkey` in `env/<env>/config.agent-toolkit.yaml` | `auth_provider: litellm` in `env/<env>/global_config.yaml`; `auth_type` is ignored |
 | Keycloak | Installed by default; the `agent-toolkit` realm is created | Not installed in LiteLLM mode |
 | LiteLLM admin UI | `https://litellm-ui.<base_domain_name>/ui/` (path mode: `https://<base_domain_name>/litellm/ui/`), Keycloak sign-in as `platform-admin` (first password in Secret `platform-bootstrap-admin`, key `value`, namespace `keycloak`) | `https://litellm.<base_domain_name>/ui/`, user `admin`, password = the master key |
-| Node readiness report | Not run by `install`; run `playbooks/preflight-check.yml` by hand (`agent-toolkit-install`, step 5) | Runs at the start of `install`; output in `env/<env>/logs/health-report-latest.*` |
 | model-manager | `list`, `deploy`, `undeploy`, `--hfid` | `deploy`, `undeploy` |
 | URL layout | `routing_mode: subdomain` (default) or `path` in `global_config.yaml` | Subdomains only |
 

@@ -113,8 +113,8 @@ Component-level failures (Agent Sandbox, Kata, OpenShell, Redis, pgvector, KubeR
 - **Why:** env files are seeded once and never overwritten.
 - **Fix:** add new keys by hand **(changes the cluster)**. Compare with this repo's `config.yaml` to see what is new.
 
-### INS-20 The node readiness report is missing (main track)
-- **Why:** on the main track, `install` does not run the toolkit's node preflight, and `node_preflight_enabled` is not read.
+### INS-20 The node readiness report is missing
+- **Why:** `node_preflight_enabled` is `false`, or the checkout is a main-track one older than Toolkit Manager commit `098b621` (16 Nov 2026), which does not run it at install. Check: `grep -n node_preflight_enabled env/<env>/*.yaml`, and on the main track `git -C <root> merge-base --is-ancestor 098b621 HEAD && echo has-it`.
 - **Fix:** run it by hand, with the user's OK **(changes the cluster)**. It runs with sudo on the nodes (add `-K` if sudo needs a password; then the user runs it), writes a temporary results file in `/tmp` on each node, and may create or edit `env/<env>/kubespray_extra.yml` to fix the kubelet DNS file. It checks only the hosts already in `inventory/hosts.yaml`.
   ```bash
   .venv/bin/ansible-playbook -i env/<env>/inventory/hosts.yaml ext/enterprise.agent-toolkit/playbooks/preflight-check.yml

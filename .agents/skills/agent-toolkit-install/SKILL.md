@@ -48,9 +48,9 @@ This clones the inference and toolkit repos into `ext/` and seeds `env/<env>/`. 
 
 The agent-toolkit-configuration skill explains every key.
 
-## 5. Check the nodes (main track)
+## 5. Check the nodes
 
-On the main track `install` does not run the toolkit's node readiness report, so run it first (ask the user):
+`install` runs the toolkit's node readiness report at its start. Run it by hand first (ask the user) to see the report before installing, or on a main-track checkout older than Toolkit Manager commit `098b621` (16 Nov 2026), which does not run it (`git -C <root> merge-base --is-ancestor 098b621 HEAD || echo older`):
 
 ```bash
 .venv/bin/ansible-playbook -i env/<env>/inventory/hosts.yaml ext/enterprise.agent-toolkit/playbooks/preflight-check.yml   # add -K if sudo needs a password
@@ -60,7 +60,7 @@ On the main track `install` does not run the toolkit's node readiness report, so
 - It may create or edit `env/<env>/kubespray_extra.yml` to fix the kubelet DNS file.
 - It checks the hosts in `inventory/hosts.yaml`. Before the first install that is only the installer host, because `install` generates the inventory from `nodes.yaml`. Run the per-node checks in `references/prerequisites.md` on the other nodes.
 
-Fix every FAIL using its hint. On the release track this report runs at the start of `install`.
+Fix every FAIL using its hint.
 
 ## 6. Install
 

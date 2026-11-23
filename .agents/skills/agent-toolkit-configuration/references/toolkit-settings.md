@@ -8,7 +8,7 @@ All keys below go in `env/<env>/config.agent-toolkit.yaml` unless the table says
 
 | Key | Default | Meaning and when to change |
 |---|---|---|
-| `node_preflight_enabled` | `true` | Release track: node readiness report at the start of `install` (report only, capped at 5 minutes); turn off for CI or a slow SSH fan-out. Main track: nothing reads it. Run the report by hand instead (agent-toolkit-install skill, step 5). |
+| `node_preflight_enabled` | `true` | Node readiness report at the start of `install` (report only, capped at 5 minutes); turn off for CI or a slow SSH fan-out. A main-track checkout older than Toolkit Manager commit `098b621` does not read it; run the report by hand there (agent-toolkit-install skill, step 5). |
 | `auth_type` | `litellm_vkey` | API access mode. `litellm_vkey` = LiteLLM with virtual keys (what the toolkit needs). `jwt` = Keycloak tokens straight to the AI gateway, with no LiteLLM, guardrail, hybrid router, Langfuse or OpenShell provider. Main track only; see "Auth switch" in `../SKILL.md`. |
 | `guardrails_enabled` | on with LiteLLM | Content-safety guard on every LiteLLM request. Fail-closed, and adds the `qwen3guard` CPU model. Set `false` to save CPU or for latency tests. How to apply on or off differs by track; see `../SKILL.md` section 4. |
 | `hybrid_router_enabled` | `true` | Publishes the LiteLLM model `hybrid-router`. Changes on an installed LiteLLM need `-- -e litellm_reconcile=true`. |
