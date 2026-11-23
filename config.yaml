@@ -41,17 +41,20 @@ vllm_sr_dashboard_enabled: true
 vllm_sr_litellm_model_name: "vllm-sr/auto"
 
 # --- Redis Stack ---
+redis_stack_enabled: true
 redis_stack_namespace: "redis"
 redis_stack_storage_class: ""          # empty = cluster default StorageClass
 redis_stack_persistence_size: "10Gi"
 
 # --- pgvector ---
+pgvector_enabled: true
 pgvector_namespace: "pgvector"
 pgvector_database: "agentdb"
 pgvector_username: "agentuser"
 pgvector_storage_size: "20Gi"
 
 # --- Agent Sandbox ---
+agent_sandbox_enabled: true
 agent_sandbox_namespace: "agent-sandbox-system"   # fixed: the upstream manifests and sandbox templates use this namespace
 agent_sandbox_version: "v1.0.10"
 
