@@ -48,10 +48,43 @@
   register: _val_space_key
   no_log: true
 
-# Upstream's standard-library walkthrough: create a sandbox, run a command, delete it
+- name: "space | validate | Check whether SPACE is published on the gateway"
+  kubernetes.core.k8s_info:
+    api_version: gateway.networking.k8s.io/v1
+    kind: HTTPRoute
+    name: space-api
+    namespace: "{{ space_namespace }}"
+  register: _val_space_route
+
+- name: "space | validate | Find the gateway address"
+  kubernetes.core.k8s_info:
+    kind: Service
+    namespace: "{{ gateway_namespace | default('envoy-gateway-system') }}"
+    label_selectors:
+      - "gateway.envoyproxy.io/owning-gateway-name={{ gateway_name | default('eg-gateway') }}"
+  register: _val_space_gateway
+  when: _val_space_route.resources | length > 0
+
+# Upstream's standard-library walkthrough: create a sandbox, run a command and
+# delete it. Published, it goes through the gateway routes: the API hands out
+# the public data-plane URL, and the walkthrough refuses any other origin.
 - name: "space | validate | Create a sandbox, run a command and delete it"
+  vars:
+    _public: "{{ _val_space_route.resources | length > 0 }}"
+    _gateway_ip: >-
+      {{ (_val_space_gateway.resources | default([]) | first | default({})).status.loadBalancer.ingress[0].ip
+         | default('') if _public | bool else '' }}
+    _ca: "{{ env_dir | default('') }}/logs/ai-solutions-ca.crt"
   ansible.builtin.shell: |
     set -euo pipefail
+    export SPACE_API_TOKEN={{ _val_space_key.resources[0].data.SPACE_API_TOKEN | b64decode | quote }}
+    {% if _public | bool %}
+    export SPACE_API_URL=https://{{ space_api_hostname }} SPACE_DATA_PLANE_URL=https://{{ space_data_plane_hostname }}
+    {% if _ca is file %}export SSL_CERT_FILE={{ _ca | quote }}{% endif %}
+
+    echo y | python3 {{ role_path }}/files/run_via_gateway.py {{ _gateway_ip | quote }} \
+      {{ space_api_hostname }},{{ space_data_plane_hostname }} examples/first_sandbox.py
+    {% else %}
     kubectl -n {{ space_namespace }} port-forward svc/space-api-entry 18080:8080 >/dev/null 2>&1 &
     api=$!
     kubectl -n {{ space_namespace }} port-forward svc/space-data-plane-entry 18090:8090 >/dev/null 2>&1 &
@@ -59,11 +92,15 @@
     trap 'kill $api $dp 2>/dev/null || true' EXIT
     sleep 3
     export SPACE_API_URL=http://127.0.0.1:18080 SPACE_DATA_PLANE_URL=http://127.0.0.1:18090
-    export SPACE_API_TOKEN={{ _val_space_key.resources[0].data.SPACE_API_TOKEN | b64decode | quote }}
     echo y | python3 examples/first_sandbox.py
+    {% endif %}
   args:
     chdir: "{{ space_src_dir }}"
     executable: /bin/bash
+  environment:
+    # The gateway and port-forwards are local: never send them through a proxy
+    NO_PROXY: "*"
+    no_proxy: "*"
   register: _val_space_smoke
   changed_when: false
   failed_when: _val_space_smoke.rc != 0 or 'Hello from SPACE' not in _val_space_smoke.stdout

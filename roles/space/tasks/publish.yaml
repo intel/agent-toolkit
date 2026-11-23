@@ -1,0 +1,45 @@
+---
+# Copyright (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+# =============================================================================
+# SPACE — publish one service on the platform gateway (space_route)
+# Through the core gateway role, as other components publish. SPACE
+# authenticates every request with its own API key, so the route is exempt
+# from the gateway's Keycloak JWT.
+# =============================================================================
+
+- name: "space | {{ space_route.name }} | Publish the host"
+  ansible.builtin.include_role:
+    name: gateway
+    tasks_from: "{{ 'publish.yaml' if _space_public | bool else 'unpublish.yaml' }}"
+  vars:
+    gateway_publish_name: "{{ space_route.name }}"
+    gateway_publish_namespace: "{{ space_namespace }}"
+    gateway_publish_host: "{{ space_route.host }}"
+    gateway_publish_mode: subdomain   # the API hands clients absolute URLs; no path prefix
+
+- name: "space | {{ space_route.name }} | Route"
+  kubernetes.core.k8s:
+    state: "{{ 'present' if _space_public | bool else 'absent' }}"
+    definition:
+      apiVersion: gateway.networking.k8s.io/v1
+      kind: HTTPRoute
+      metadata:
+        name: "{{ space_route.name }}"
+        namespace: "{{ space_namespace }}"
+        labels: {app.kubernetes.io/part-of: space}
+      spec:
+        parentRefs: "{{ [gateway_publish.parent_ref] if _space_public | bool else [] }}"
+        hostnames: ["{{ space_route.host }}"]
+        rules:
+          - timeouts: {request: "{{ space_route.timeout }}"}
+            backendRefs: [{name: "{{ space_route.service }}", port: "{{ space_route.port }}"}]
+
+- name: "space | {{ space_route.name }} | Exempt from the gateway's Keycloak JWT"
+  ansible.builtin.include_role:
+    name: gateway
+    tasks_from: route_auth_exempt.yaml
+  vars:
+    gateway_route_name: "{{ space_route.name }}"
+    gateway_route_namespace: "{{ space_namespace }}"
+    gateway_route_state: "{{ 'present' if _space_public | bool else 'absent' }}"

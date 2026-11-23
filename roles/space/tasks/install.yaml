@@ -119,6 +119,35 @@
 
 # ── SPACE ────────────────────────────────────────────────────────────────────
 
+# The shim DNATs <sandbox pod IP>:9800 to node-api on the pod's own node. Upstream
+# relies on pod-to-own-node traffic bypassing NetworkPolicy; Calico applies the
+# sandbox egress policy to it, and its internetExcept covers the node addresses.
+- name: "space | Let sandbox pods reach node-api on their node"
+  vars:
+    _node_ips: >-
+      {{ _space_workers.resources | map(attribute='status.addresses') | flatten
+         | selectattr('type', 'eq', 'InternalIP') | map(attribute='address') | list }}
+    _node_peers: >-
+      {%- set peers = [] -%}
+      {%- for ip in _node_ips -%}{%- set _ = peers.append({'ipBlock': {'cidr': ip ~ '/32'}}) -%}{%- endfor -%}
+      {{ peers }}
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: space-sandbox-to-node-api
+        namespace: "{{ space_sandbox_namespace }}"
+        labels: {app.kubernetes.io/part-of: space}
+      spec:
+        podSelector:
+          matchLabels: {app.kubernetes.io/name: space-sandbox}
+        policyTypes: [Egress]
+        egress:
+          - to: "{{ _node_peers }}"
+            ports: [{protocol: TCP, port: 9800}]
+
 - name: "space | Check for the platform gateway"
   kubernetes.core.k8s_info:
     api_version: gateway.networking.k8s.io/v1
@@ -156,24 +185,13 @@
   changed_when: true
 
 - name: "space | Publish the API and data plane on the gateway"
-  kubernetes.core.k8s:
-    state: present
-    definition: "{{ item }}"
-  loop: "{{ lookup('template', 'routes.yaml.j2') | from_yaml_all | select | list }}"
+  ansible.builtin.include_tasks: publish.yaml
+  loop:
+    - {name: space-api, host: "{{ space_api_hostname }}", service: space-api-entry, port: 8080, timeout: "{{ space_api_route_timeout }}"}
+    - {name: space-data-plane, host: "{{ space_data_plane_hostname }}", service: space-data-plane-entry, port: 8090, timeout: "{{ space_data_plane_route_timeout }}"}
   loop_control:
-    label: "{{ item.metadata.name }}"
-  when: _space_public | bool
-
-- name: "space | Remove the gateway routes when publishing is off"
-  kubernetes.core.k8s:
-    state: absent
-    api_version: gateway.networking.k8s.io/v1
-    kind: HTTPRoute
-    name: "{{ item }}"
-    namespace: "{{ space_namespace }}"
-  loop: [space-api, space-data-plane]
-  when: not _space_public | bool
-  failed_when: false
+    loop_var: space_route
+    label: "{{ space_route.name }}"
 
 - name: "space | Seed template and API key"
   ansible.builtin.include_tasks: seed.yaml
