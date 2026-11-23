@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # BuildKit for the SPACE image build: a containerd worker in kubelet's
 # namespace, so built images are usable by the cluster without an import.
+# Its state lives under containerd's root: its cache records point at
+# containerd's content store, so a reset that clears one clears both.
 [Unit]
 Description=BuildKit for SPACE image builds
 After=containerd.service
@@ -15,7 +17,7 @@ Environment="NO_PROXY={{ no_proxy | default('') }}"
 {% endif %}
 ExecStart=/usr/local/bin/buildkitd \
   --addr unix:///run/space-buildkit/buildkitd.sock \
-  --root /var/lib/space-buildkit \
+  --root /var/lib/containerd/io.space.buildkit \
   --oci-worker=false \
   --containerd-worker=true \
   --containerd-worker-addr=/run/containerd/containerd.sock \
