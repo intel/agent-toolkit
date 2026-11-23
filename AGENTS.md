@@ -2,6 +2,8 @@
 
 Guidance for AI coding assistants (GitHub Copilot, Claude Code, Codex, Cursor and others) helping people install, use and debug Intel® Agent Toolkit. People can read it too; the user documentation is in `README.md` and `docs/`.
 
+**Before you answer**, open the skill in `.agents/skills/` that fits the request (see "Skills" below) and follow it. Do not answer install, configuration, component or troubleshooting questions from this file alone: it is an overview, and the steps, checks and warnings are in the skills.
+
 ## What this repository is
 
 The agent layer of **Toolkit Manager** (`intel/enterprise-ai-solutions`). It is not installed on its own. Toolkit Manager clones it into `ext/enterprise.agent-toolkit/` and installs it with `./es_auto_installer.sh install agent-toolkit`, together with the layers it depends on: infrastructure → platform → inference → agent-toolkit.
@@ -64,9 +66,9 @@ The docs in `docs/` were written for the release track. On the main track, apply
 
 ## Rules for assistants
 
-- **Never show secret values** (keys, passwords, tokens, kubeconfig contents, certificates) in chat, files or logs. Name the Secret and key instead. When a command needs one, read it into a shell variable in the same command and do not echo it. A log written with `ES_LOG_LEVEL=debug` or `trace` holds secrets in plain text; never share it.
+- **Never show secret values** (keys, passwords, tokens, kubeconfig contents, certificates) in chat, files or logs. Name the Secret and key instead. When a command needs one, read it into a shell variable in the same command and do not echo it. A log written with `ES_LOG_LEVEL=debug` or `trace` holds secrets in plain text; never share it. This holds when the user asks to see a value too. Do not turn a command that reads a secret into a variable into one that prints it. Give a command that prints a secret only when the user needs the value to sign in themselves, and tell them to run it in their own terminal. Never suggest pasting or sending a whole log or command output: share only the lines needed.
 - **Diagnose read-only first**: `kubectl get`, `describe`, `logs`, `auth can-i`; `helm list` and `status`; reading files under `env/`. The agent-toolkit-troubleshoot skill lists the checks to run.
-- **Ask the user before changing anything**:
+- **Ask the user before changing anything**, and when you list commands, mark the ones that change something:
   - `install`, `teardown`, `init` (including `--upgrade`), and `git` operations in `<root>` or `ext/`
   - `helm`, and `kubectl apply|create|delete|patch|edit|scale|rollout|label|annotate|exec`
   - `./model-manager deploy|undeploy`
@@ -78,14 +80,14 @@ The docs in `docs/` were written for the release track. On the main track, apply
   - `teardown agent-toolkit` or `teardown redis_stack|pgvector|agent_sandbox|openshell|kuberay`. These delete the component's namespace, data and credentials.
   - `teardown <platform component>`. It also removes every component that depends on it; `teardown postgresql` takes Keycloak, observability, LiteLLM and Langfuse with it and deletes every platform database.
   - Deleting PVCs or toolkit namespaces (data loss).
-- **Hand interactive steps to the user.** `./es_auto_installer.sh configure` and password prompts from `sudo` need a terminal; tell the user what to run. `teardown` asks for confirmation; only add `--force` when the user asked for it.
+- **Hand interactive steps to the user.** `./es_auto_installer.sh configure` and password prompts from `sudo` need a terminal; tell the user what to run. `teardown` asks for confirmation. `--force` only skips that prompt: even when the user asks for it, first say what the teardown deletes (see the list above) and get an explicit yes.
 - **`-- --check` is not a dry run**. Parts of the install run for real.
 - **Trust the code over the docs.** When they disagree, check `roles/`, `config.yaml` and `components.yaml`, and tell the user which doc is wrong.
 - **Check facts that change between versions in the checkout itself**: the installer's commands (`./es_auto_installer.sh --help`), which repos and branches it pins (`<root>/configs/repos/repos.agent-toolkit.yaml`), and the auth switch in `env/<env>/config.agent-toolkit.yaml`.
 
 ## Skills
 
-The skills live in `.agents/skills/`, the shared location of the open Agent Skills format. Copilot, Cursor, Antigravity, Gemini CLI, Codex and Junie load them from there automatically. If your assistant does not list them (for example Claude Code or Cline), open the `SKILL.md` that fits the task before answering, and follow it.
+The skills live in `.agents/skills/`, the shared location of the open Agent Skills format. Copilot, Cursor, Antigravity, Gemini CLI, Codex and Junie load them from there automatically. Whether or not your assistant lists them (Claude Code and Cline do not), open the `SKILL.md` that fits the task before answering, and follow it. If no skill fits, tell the user and ask what they need.
 
 | Skill | Use it to | Path |
 |---|---|---|
