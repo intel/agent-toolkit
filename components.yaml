@@ -47,6 +47,8 @@ components:
   # Hosts are prepared by the infrastructure layer's space_node.
   - name: space
     layer: agent-toolkit
+    # Its releases come from upstream install.sh; the role's teardown removes them
+    teardown: both
     enabled: "{{ space_enabled | default(false) | bool }}"
     depends_on: []
 
