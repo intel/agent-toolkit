@@ -169,7 +169,6 @@
               docker run --rm
               -e HOME=/tmp -e GOCACHE=/tmp/go-cache -e GOMODCACHE=/tmp/go-mod
               -e CGO_ENABLED=0 -e GOOS=linux -e GOARCH=amd64
-              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY
               -v {{ space_src_dir }}/shim:/src:ro -v {{ space_build_dir }}:/out -w /src
               {{ space_go_image }}
               go build -buildvcs=false -trimpath -o /out/containerd-shim-space-v2-{{ space_image_tag }} .

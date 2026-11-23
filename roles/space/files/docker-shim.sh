@@ -8,17 +8,27 @@ set -euo pipefail
 NS=k8s.io
 BUILDKIT=unix:///run/space-buildkit/buildkitd.sock
 
+# Docker hands the client's proxy to builds and containers; do the same
+proxy_vars=()
+for v in HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; do
+  [[ -n ${!v:-} ]] && proxy_vars+=("$v")
+done
+
 if [[ ${1:-} != build ]]; then
   # Build helpers need no cluster networking
   if [[ ${1:-} == run || ${1:-} == create ]]; then
     cmd=$1; shift
-    exec nerdctl --namespace "$NS" "$cmd" --net=host "$@"
+    env_args=()
+    for v in "${proxy_vars[@]}"; do env_args+=(-e "$v=${!v}"); done
+    exec nerdctl --namespace "$NS" "$cmd" --net=host "${env_args[@]}" "$@"
   fi
   exec nerdctl --namespace "$NS" "$@"
 fi
 shift
 
 opts=() tags=() outputs=() file=Dockerfile ctx=""
+# Predefined build args, as Docker passes them: RUN steps reach the network through the proxy
+for v in "${proxy_vars[@]}"; do opts+=(--opt "build-arg:$v=${!v}"); done
 add_context() { # name=value, value a directory or a docker-image:// ref
   local name=${1%%=*} value=${1#*=}
   if [[ $value == *://* ]]; then
