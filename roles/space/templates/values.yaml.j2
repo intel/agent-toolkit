@@ -77,7 +77,9 @@ space-node-manager-local: &node-chart
   image: {{ img('space-worker') }}
   node: *node
 space-runtime-manager-local: *node-chart
-space-volume-manager-local: *node-chart
+space-volume-manager-local:
+  <<: *node-chart
+  storageCredentials: static   # pulls templates and uploads snapshots with the space-object-store keys
 space-credential-manager-local: *node-chart
 space-template-manager-local: *node-chart
 space-sandbox-manager-local:
@@ -94,6 +96,7 @@ space-build-manager-local:
   clusterId: {{ space_cluster_id }}
   image: {{ img('space-worker') }}
   node: *node
+  storageCredentials: static
   objectStore:
     bucket: {{ space_template_bucket }}
   egress:
