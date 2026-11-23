@@ -9,7 +9,7 @@
   become: true
   delegate_to: "{{ space_host }}"
   environment:
-    PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    PATH: "{{ space_node_path }}"
   block:
     - name: "space | {{ space_host }} | Find SPACE images missing from containerd"
       ansible.builtin.shell: |

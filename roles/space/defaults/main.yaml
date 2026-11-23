@@ -28,6 +28,9 @@ space_images:
   - {name: space-kind-key-broker, dockerfile: docker/Dockerfile.kind-key-broker}
 space_rust_artifact_image: "space-rust-build-kind:local"
 space_go_image: "docker.io/library/golang:1.25-bookworm"
+# PATH for commands on the nodes. A localhost-mode cluster keeps kubespray's
+# containerd tools (ctr, nerdctl) in <kubespray_dir>/bin, ahead of any older copies.
+space_node_path: "{{ (kubespray_dir ~ '/bin:') if kubespray_dir is defined else '' }}/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 # BuildKit, installed on the build host when missing (nodes run no Docker)
 space_buildkit_version: "v0.34.1"
 
