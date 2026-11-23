@@ -136,7 +136,7 @@
 - name: "space | Render the install values"
   ansible.builtin.template:
     src: values.yaml.j2
-    dest: "{{ space_build_dir }}/values.yaml"
+    dest: "{{ space_values_file }}"
     mode: "0600"
 
 - name: "space | Read the current kube context"
@@ -148,7 +148,7 @@
 - name: "space | Run the upstream cluster install"
   ansible.builtin.command:
     cmd: >-
-      bash infra/space/cluster/install.sh -f {{ space_build_dir }}/values.yaml
+      bash infra/space/cluster/install.sh -f {{ space_values_file }}
       --kube-context {{ _space_kube_context.stdout }} --namespace {{ space_namespace }}
       --timeout {{ space_install_timeout }}
     chdir: "{{ space_src_dir }}"

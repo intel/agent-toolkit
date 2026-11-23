@@ -1,0 +1,26 @@
+# Copyright (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+# BuildKit for the SPACE image build: a containerd worker in kubelet's
+# namespace, so built images are usable by the cluster without an import.
+[Unit]
+Description=BuildKit for SPACE image builds
+After=containerd.service
+Requires=containerd.service
+
+[Service]
+{% if http_proxy | default('') %}
+Environment="HTTP_PROXY={{ http_proxy }}"
+Environment="HTTPS_PROXY={{ https_proxy | default(http_proxy) }}"
+Environment="NO_PROXY={{ no_proxy | default('') }}"
+{% endif %}
+ExecStart=/usr/local/bin/buildkitd \
+  --addr unix:///run/space-buildkit/buildkitd.sock \
+  --root /var/lib/space-buildkit \
+  --oci-worker=false \
+  --containerd-worker=true \
+  --containerd-worker-addr=/run/containerd/containerd.sock \
+  --containerd-worker-namespace=k8s.io
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

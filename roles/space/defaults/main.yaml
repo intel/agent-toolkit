@@ -16,7 +16,7 @@ space_sandbox_namespace: "sandboxes"
 # space_rev and imported into containerd on the nodes.
 space_src_dir: "{{ lookup('env', 'HOME') }}/.cache/ai-solutions/space/src"
 space_build_dir: "{{ space_src_dir }}/../build"
-space_vendor_dir: "{{ space_src_dir }}/../vendor"   # staged by space_node
+space_values_file: "{{ space_src_dir }}/../install-values.yaml"
 space_build_min_free_gb: 40
 space_image_tag: "{{ space_rev[:12] }}"
 space_image_prefix: "localhost/space"
@@ -28,6 +28,8 @@ space_images:
   - {name: space-kind-key-broker, dockerfile: docker/Dockerfile.kind-key-broker}
 space_rust_artifact_image: "space-rust-build-kind:local"
 space_go_image: "docker.io/library/golang:1.25-bookworm"
+# BuildKit, installed on the build host when missing (nodes run no Docker)
+space_buildkit_version: "v0.34.1"
 
 # Nodes (labels set by space_node in enterprise-ai-solutions)
 space_node_label_key: "node.kubernetes.io/space-enabled"

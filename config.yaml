@@ -65,8 +65,8 @@ litellm_allow_pod_network: "{{ openshell_enabled | bool or space_enabled | bool 
 
 # --- SPACE (optional — disabled by default; evaluation only, see docs/space.md) ---
 # Firecracker microVM sandboxes from perplexityai/SPACE, next to Agent Sandbox.
-# Needs KVM workers; the install builds SPACE from source on the installer host
-# (Docker, ~40 GB free disk, a long first build). Upstream has no releases yet,
+# Needs KVM workers; the install builds SPACE from source with BuildKit on the first
+# SPACE worker (~40 GB free disk, a long first build). Upstream has no releases yet,
 # so it is pinned to a commit.
 space_enabled: false
 space_rev: "a08174bc17a9b8205691ec7d8fe7ba1f90ee3f97"

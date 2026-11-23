@@ -44,7 +44,7 @@ The pinned commit is `space_rev` in the same file. Upstream has no tags yet.
 |---|---|
 | Workers | x86_64 with `/dev/kvm` (Intel VT-x on bare metal, or nested virtualisation on a VM) and `/dev/vhost-vsock`. The installer loads `kvm_intel` and `vhost_vsock` itself. |
 | Workers | Disk for a sparse btrfs cache image (`space_cache_size_gb`, default 100 GB virtual). |
-| Installer host | Docker, with privileged builds allowed, and about 40 GB free under `space_src_dir` and Docker's data root. The first build compiles the Rust workspace and can take an hour or more. Later runs reuse it. |
+| First SPACE worker (the build host) | About 40 GB free under `space_src_dir` and `/var/lib`. The first build compiles the Rust workspace and can take an hour or more; later runs reuse it. No Docker is needed: cluster nodes must not run Docker, because kubespray would remove it. BuildKit is installed when missing (`space_buildkit_version`). |
 | Platform | PostgreSQL, SeaweedFS (object store) and cert-manager, all on by default. |
 | Cluster | Provisioned by this installer. SPACE is not supported on a BYO cluster (`existing_kubernetes`) or on OpenShift, because host preparation runs over SSH. |
 
@@ -62,7 +62,12 @@ The pinned commit is `space_rev` in the same file. Upstream has no tags yet.
 It then labels the ready workers and applies the `space` RuntimeClass and the SPACE PriorityClasses.
 
 **Agent-toolkit layer, `space`:**
-1. **Build.** Builds SPACE at `space_rev` on the installer host: the service images, the containerd shim and the seed template. It imports the images into containerd on each SPACE worker and installs the shim there. Only missing artifacts are built.
+1. **Build.** Builds SPACE at `space_rev` on the first SPACE worker: the service images, the containerd shim and the seed template.
+   - BuildKit (unit `space-buildkitd`) runs as a containerd worker in the cluster's `k8s.io` namespace, so the images are usable there without an import.
+   - Upstream's build scripts call `docker`, so they get a small shim: `docker build` runs on BuildKit (`buildctl`), and every other command runs on `nerdctl`.
+   - Other workers import an image archive.
+   - Every worker gets the containerd shim.
+   - Only missing artifacts are built.
 2. **Secrets and TLS.** Creates the Secrets the upstream install needs, and the internal TLS identities through cert-manager. Generated Secrets are created once and never rotated by a re-run.
 3. **Platform services.** Gets a PostgreSQL database (`space`) and object-store buckets (`space-snapshots`, `space-templates`) from the platform.
 4. **Key broker.** Deploys the fixture key broker behind an Envoy TLS front.
@@ -187,7 +192,7 @@ infrastructure layer, so it is removed with that layer or by name.
 
 These stay:
 - the `space` database and buckets, as for other platform consumers;
-- the build cache on the installer host (`~/.cache/ai-solutions/space`).
+- the build cache (`~/.cache/ai-solutions/space`) and the `space-buildkitd` unit on the build host.
 
 The host setup stays on the nodes too. To remove it from a node:
 
