@@ -109,6 +109,13 @@
         - _space_missing.stdout_lines | length > 0
         - (_space_free_gb.stdout | int) < (space_build_min_free_gb | int)
 
+    # The worker image records the source commit time, as upstream's CI sets it
+    - name: "space | build | Read the source commit time"
+      ansible.builtin.command: git -c safe.directory='*' -C {{ space_src_dir }} show -s --format=%ct {{ space_rev }}  # noqa: command-instead-of-module
+      register: _space_commit_time
+      changed_when: false
+      when: _space_missing.stdout_lines | length > 0
+
     - name: "space | build | Build"
       when: _space_missing.stdout_lines | length > 0
       environment:
@@ -120,6 +127,7 @@
         SPACE_SEED_OUTPUT_DIR: "{{ space_build_dir }}/seed"
         SPACE_RUST_BUILD_IMAGE: "{{ space_rust_artifact_image }}"
         SPACE_GIT_SHA: "{{ space_rev }}"
+        SPACE_BUILD_TIME: "{{ '%Y-%m-%dT%H:%M:%SZ' | strftime(_space_commit_time.stdout | int, utc=true) }}"
         # The checkout belongs to the installer user; the build runs as root
         GIT_CONFIG_COUNT: "1"
         GIT_CONFIG_KEY_0: safe.directory
@@ -140,7 +148,7 @@
             cmd: >-
               docker build -f {{ item.dockerfile }}
               --build-arg SPACE_RUST_BUILD_IMAGE={{ space_rust_artifact_image }}
-              --build-arg SPACE_GIT_SHA={{ space_rev }}
+              --build-arg SPACE_GIT_SHA={{ space_rev }} --build-arg SPACE_BUILD_TIME
               -t {{ space_image_prefix }}/{{ item.name }}:{{ space_image_tag }} .
             chdir: "{{ space_src_dir }}"
           loop: "{{ space_images | selectattr('name', 'in', _space_missing.stdout_lines) | list }}"
