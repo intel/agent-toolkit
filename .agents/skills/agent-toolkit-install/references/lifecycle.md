@@ -15,7 +15,7 @@ All commands run from the Toolkit Manager root. `--env <env>` defaults to `local
 | Show nodes, pods and URLs | `./es_auto_installer.sh status --env <env>` |
 | List components and layers | `./es_auto_installer.sh show` |
 | Verbose output | `ES_LOG_LEVEL=debug ./es_auto_installer.sh ...`. The log then holds the LiteLLM master key and `HF_TOKEN` in plain text: never share it, and delete it when done. |
-| Node readiness report (main track; runs with sudo, may write `env/<env>/kubespray_extra.yml`) | `.venv/bin/ansible-playbook -i env/<env>/inventory/hosts.yaml ext/enterprise.agent-toolkit/playbooks/preflight-check.yml` (add `-K` if sudo needs a password) |
+| Node readiness report by hand (`install` already runs it; runs with sudo, may write `env/<env>/kubespray_extra.yml`) | `.venv/bin/ansible-playbook -i env/<env>/inventory/hosts.yaml ext/enterprise.agent-toolkit/playbooks/preflight-check.yml` (add `-K` if sudo needs a password) |
 
 `./es_auto_installer.sh --help` lists the actions and flags of the installed version.
 

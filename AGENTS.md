@@ -2,6 +2,8 @@
 
 Guidance for AI coding assistants (GitHub Copilot, Claude Code, Codex, Cursor and others) helping people install, use and debug Intel® Agent Toolkit. People can read it too; the user documentation is in `README.md` and `docs/`.
 
+**Before you answer**, open the skill in `.agents/skills/` that fits the request (see "Skills" below) and follow it. Do not answer install, configuration, component or troubleshooting questions from this file alone: it is an overview, and the steps, checks and warnings are in the skills.
+
 ## What this repository is
 
 The agent layer of **Toolkit Manager** (`intel/enterprise-ai-solutions`). It is not installed on its own. Toolkit Manager clones it into `ext/enterprise.agent-toolkit/` and installs it with `./es_auto_installer.sh install agent-toolkit`, together with the layers it depends on: infrastructure → platform → inference → agent-toolkit.
@@ -12,7 +14,7 @@ The agent layer of **Toolkit Manager** (`intel/enterprise-ai-solutions`). It is 
 | `config.yaml` | Defaults. `init agent-toolkit` copies it to `env/<env>/config.agent-toolkit.yaml`, which is the file to edit |
 | `roles/<component>/` | Ansible roles; each has `install`, `teardown` and `validate` task files |
 | `charts/` | Helm charts the roles install |
-| `playbooks/preflight-check.yml` | Node readiness report. It runs at the start of `install` on the release track only. |
+| `playbooks/preflight-check.yml` | Node readiness report. It runs at the start of `install` (off with `node_preflight_enabled: false`). A main-track checkout older than Toolkit Manager commit `098b621` (16 Nov 2026) does not run it. |
 | `docs/` | User documentation (some pages disagree with the code; see `agent-toolkit-troubleshoot`) |
 | `docker/` | A Docker Compose variant, not covered here |
 
@@ -43,16 +45,20 @@ Run every `./es_auto_installer.sh` and `./model-manager` command from the Toolki
 
 ## Which track the installation is on
 
-The toolkit code is the same on both tracks, but the Toolkit Manager and inference layer around it differ. Check before giving instructions:
-- `git -C <root> branch --show-current`
-- `ls <root>/playbooks/includes/agent_toolkit_preflight.yaml` (exists only on the release track)
+The toolkit code is the same on both tracks, but the Toolkit Manager and inference layer around it differ. The track is the Toolkit Manager branch the checkout is built on. Do not judge it by files (they get copied between branches) or by the branch name (it can be detached or renamed). Ask git which branch is closest (read-only, no fetch):
+
+```bash
+for b in $(git -C <root> for-each-ref --format='%(refname:short)' 'refs/remotes/*/main' 'refs/remotes/*/release-*'); do
+  echo "$(git -C <root> rev-list --count "$b..HEAD") $b"; done | sort -n | head -3
+```
+
+The first line (fewest commits) is the track: `.../main` is the main track, `.../release-1.2` the release track. Older branches such as `release-1.1` are not covered here; tell the user. If the top two lines show the same number, or the command fails (no git history), ask the user which branch they cloned.
 
 | | Main track (Toolkit Manager `main`) | Release track (Toolkit Manager `release-1.2`) |
 |---|---|---|
 | API access switch | `auth_type: litellm_vkey` in `env/<env>/config.agent-toolkit.yaml` | `auth_provider: litellm` in `env/<env>/global_config.yaml`; `auth_type` is ignored |
 | Keycloak | Installed by default; the `agent-toolkit` realm is created | Not installed in LiteLLM mode |
 | LiteLLM admin UI | `https://litellm-ui.<base_domain_name>/ui/` (path mode: `https://<base_domain_name>/litellm/ui/`), Keycloak sign-in as `platform-admin` (first password in Secret `platform-bootstrap-admin`, key `value`, namespace `keycloak`) | `https://litellm.<base_domain_name>/ui/`, user `admin`, password = the master key |
-| Node readiness report | Not run by `install`; run `playbooks/preflight-check.yml` by hand (`agent-toolkit-install`, step 5) | Runs at the start of `install`; output in `env/<env>/logs/health-report-latest.*` |
 | model-manager | `list`, `deploy`, `undeploy`, `--hfid` | `deploy`, `undeploy` |
 | URL layout | `routing_mode: subdomain` (default) or `path` in `global_config.yaml` | Subdomains only |
 
@@ -60,9 +66,9 @@ The docs in `docs/` were written for the release track. On the main track, apply
 
 ## Rules for assistants
 
-- **Never show secret values** (keys, passwords, tokens, kubeconfig contents, certificates) in chat, files or logs. Name the Secret and key instead. When a command needs one, read it into a shell variable in the same command and do not echo it. A log written with `ES_LOG_LEVEL=debug` or `trace` holds secrets in plain text; never share it.
+- **Never show secret values** (keys, passwords, tokens, kubeconfig contents, certificates) in chat, files or logs. Name the Secret and key instead. When a command needs one, read it into a shell variable in the same command and do not echo it. A log written with `ES_LOG_LEVEL=debug` or `trace` holds secrets in plain text; never share it. This holds when the user asks to see a value too. Do not turn a command that reads a secret into a variable into one that prints it. Give a command that prints a secret only when the user needs the value to sign in themselves, and tell them to run it in their own terminal. Never suggest pasting or sending a whole log or command output: share only the lines needed.
 - **Diagnose read-only first**: `kubectl get`, `describe`, `logs`, `auth can-i`; `helm list` and `status`; reading files under `env/`. The agent-toolkit-troubleshoot skill lists the checks to run.
-- **Ask the user before changing anything**:
+- **Ask the user before changing anything**, and when you list commands, mark the ones that change something:
   - `install`, `teardown`, `init` (including `--upgrade`), and `git` operations in `<root>` or `ext/`
   - `helm`, and `kubectl apply|create|delete|patch|edit|scale|rollout|label|annotate|exec`
   - `./model-manager deploy|undeploy`
@@ -74,14 +80,14 @@ The docs in `docs/` were written for the release track. On the main track, apply
   - `teardown agent-toolkit` or `teardown redis_stack|pgvector|agent_sandbox|openshell|kuberay`. These delete the component's namespace, data and credentials.
   - `teardown <platform component>`. It also removes every component that depends on it; `teardown postgresql` takes Keycloak, observability, LiteLLM and Langfuse with it and deletes every platform database.
   - Deleting PVCs or toolkit namespaces (data loss).
-- **Hand interactive steps to the user.** `./es_auto_installer.sh configure` and password prompts from `sudo` need a terminal; tell the user what to run. `teardown` asks for confirmation; only add `--force` when the user asked for it.
+- **Hand interactive steps to the user.** `./es_auto_installer.sh configure` and password prompts from `sudo` need a terminal; tell the user what to run. `teardown` asks for confirmation. `--force` only skips that prompt: even when the user asks for it, first say what the teardown deletes (see the list above) and get an explicit yes.
 - **`-- --check` is not a dry run**. Parts of the install run for real.
 - **Trust the code over the docs.** When they disagree, check `roles/`, `config.yaml` and `components.yaml`, and tell the user which doc is wrong.
 - **Check facts that change between versions in the checkout itself**: the installer's commands (`./es_auto_installer.sh --help`), which repos and branches it pins (`<root>/configs/repos/repos.agent-toolkit.yaml`), and the auth switch in `env/<env>/config.agent-toolkit.yaml`.
 
 ## Skills
 
-The skills live in `.agents/skills/`, the shared location of the open Agent Skills format. Copilot, Cursor, Antigravity, Gemini CLI, Codex and Junie load them from there automatically. If your assistant does not list them (for example Claude Code or Cline), open the `SKILL.md` that fits the task before answering, and follow it.
+The skills live in `.agents/skills/`, the shared location of the open Agent Skills format. Copilot, Cursor, Antigravity, Gemini CLI, Codex and Junie load them from there automatically. Whether or not your assistant lists them (Claude Code and Cline do not), open the `SKILL.md` that fits the task before answering, and follow it. If no skill fits, tell the user and ask what they need.
 
 | Skill | Use it to | Path |
 |---|---|---|

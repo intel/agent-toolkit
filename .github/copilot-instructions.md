@@ -14,7 +14,7 @@ When helping a user:
 - **Settings** live in the environment's files, `env/<env>/config.agent-toolkit.yaml` and `global_config.yaml`, not in this repo's `config.yaml`. `global_config.yaml` loads after the layer files and wins over them.
 - **Cluster access:** `export KUBECONFIG=<root>/env/<env>/kubeconfig.yaml`. Logs are in `<root>/env/<env>/logs/`.
 - **Diagnose read-only first** with `kubectl get`, `describe` and `logs`, and the newest log in `<root>/env/<env>/logs/`. The agent-toolkit-troubleshoot skill lists the checks.
-- **Never print secret values.** Name the Secret and key instead. A log written with `ES_LOG_LEVEL=debug` holds secrets in plain text; never share it.
+- **Never print secret values**, even when the user asks. Name the Secret and key instead. Give a command that prints a secret only when the user needs it to sign in, to run in their own terminal. Never suggest pasting or sending a whole log; share only the lines needed. A log written with `ES_LOG_LEVEL=debug` holds secrets in plain text; never share it.
 - **Ask before** install, teardown, `init`, git operations in `ext/`, `helm`, `kubectl apply|create|delete|patch|edit|scale|rollout|label|annotate|exec`, `./model-manager deploy|undeploy`, edits to `env/` files, or `playbooks/preflight-check.yml` (it runs sudo on the nodes and can write `env/<env>/kubespray_extra.yml`).
 - **Warn and get explicit confirmation before** any of these:
   - `teardown platform` deletes every database, including LiteLLM keys.
@@ -23,9 +23,9 @@ When helping a user:
   - `teardown <platform component>` also removes everything that depends on it; `postgresql` deletes every platform database.
   - Deleting PVCs or toolkit namespaces (data loss).
   - `./model-manager undeploy all` also removes the guard model.
-- **Hand interactive steps to the user.** `configure` and `sudo` password prompts need a terminal. `teardown` asks for confirmation; add `--force` only when the user asked for it.
+- **Hand interactive steps to the user.** `configure` and `sudo` password prompts need a terminal. `teardown` asks for confirmation. `--force` only skips that prompt: even when the user asks for it, first say what the teardown deletes and get an explicit yes.
 - **`-- --check` is not a dry run.** Parts of the install run for real.
 - **Toolkit services are in an Istio ambient mesh.** A pod outside the mesh, or not allowed by LiteLLM, gets a connection reset, not an error.
 - **Agent Sandbox pods can reach public IP addresses only.** Cluster services, cluster DNS and proxies on private addresses are blocked, by design.
 
-Full guidance: `AGENTS.md`. Detailed skills: `.agents/skills/agent-toolkit-{install,configuration,components,troubleshoot}/SKILL.md` (read the one that fits the task).
+Full guidance: `AGENTS.md`. Detailed skills: `.agents/skills/agent-toolkit-{install,configuration,components,troubleshoot}/SKILL.md` (open the one that fits the task before answering, and follow it).

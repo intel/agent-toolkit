@@ -11,8 +11,7 @@ The pages were written for Toolkit Manager `release-1.2`. On the main track:
 | `docs/README.md`, `docs/single-node-deployment.md` (quick start) | `git clone -b release-1.2 ...` | Plain `git clone` (the default branch is main). `README.md` already does this, so the two disagree. |
 | `docs/single-node-deployment.md`, `docs/configuring-inference-config-cfg-file.md` | `auth_provider: "litellm"` in `global_config.yaml`, "set by init agent-toolkit" | `init` seeds `auth_type: "litellm_vkey"` in `config.agent-toolkit.yaml`. A leftover `auth_provider` must agree with it, or preflight stops. |
 | `docs/single-node-deployment.md` "Access the LiteLLM UI" | `https://litellm.<domain>/ui`, user `admin`, password = master key | `https://litellm-ui.<domain>/ui/` (path mode `https://<domain>/litellm/ui/`), Keycloak sign-in (`platform-admin`) |
-| `docs/validate-stack.md` | The node preflight runs at the start of `install` and writes `health-report-latest.*` | `install` does not run it. Run `playbooks/preflight-check.yml` by hand (agent-toolkit-install skill, step 5). |
-| `config.yaml` comments above `auth_type` and `node_preflight_enabled` | "This release reads auth_provider in global_config.yaml instead"; node checks "at the start of install" | `auth_type` is the switch on the main track, and the node checks do not run at install |
+| `config.yaml` comment above `auth_type` | "This release reads auth_provider in global_config.yaml instead" | `auth_type` is the switch on the main track |
 | `config.yaml` comment above `keycloak_agent_realm` | "Optional in LiteLLM mode: set keycloak_enabled: true for the realm" | Keycloak is installed by default, and the realm is created by default |
 
 ## Wrong on both tracks
