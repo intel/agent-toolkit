@@ -25,12 +25,13 @@
 >
 > | Classic switch | Setting | File |
 > |---|---|---|
-> | `deploy_agent_sandbox`, `deploy_redis`, `deploy_pgvector` | `agent_sandbox_enabled`, `redis_stack_enabled`, `pgvector_enabled` (on) | `config.agent-toolkit.yaml` |
+> | `deploy_redis`, `deploy_pgvector` | `redis_stack_enabled`, `pgvector_enabled` (on) | `config.agent-toolkit.yaml` |
+> | `deploy_agent_sandbox` | `agent_sandbox_enabled` (off) | `global_config.yaml` (wins) or `config.agent-toolkit.yaml` |
 > | `deploy_openshell`, `deploy_kuberay` | `openshell_enabled`, `kuberay_enabled` (off) | `config.agent-toolkit.yaml` |
 > | (new) SPACE microVM sandboxes, evaluation only | `space_enabled` (off), see [SPACE](docs/space.md) | `config.agent-toolkit.yaml` |
 > | `deploy_genai_gateway`, `deploy_guardrails` | `auth_provider: "litellm"` (set by `init agent-toolkit`); `guardrails_enabled` | `global_config.yaml`; `config.agent-toolkit.yaml` |
 > | `deploy_vllm_sr` | `vllm_sr_enabled` | `config.inference.yaml` |
-> | `deploy_kata_containers` | `kata_containers_enabled`, `kata_runtime` | `global_config.yaml` |
+> | `deploy_kata_containers` | `kata_containers_enabled`, `kata_runtime` | `config.agent-toolkit.yaml` |
 > | `deploy_llm_models`, `models=` | `llm_services_autodeploy_models`; `./model-manager deploy <name>` | `config.agent-toolkit.yaml` |
 > | `deploy_istio`, `deploy_observability`, `deploy_ceph`, `deploy_kubernetes_fresh` | `istio_enabled`, `observability_enabled`, `storage_backend`, `existing_kubernetes` | `global_config.yaml` |
 >
@@ -135,7 +136,7 @@ Gives agents the ability to take actions in the world — call APIs, run code, q
 ---
 
 ### Code Execution & Sandbox
-Enables agents to safely execute code and run arbitrary actions in isolated environments, preventing runaway agents from affecting production systems. Each sandbox is a fully self-contained ephemeral Kubernetes pod with its own filesystem and process tree. Policy controls limit the blast radius of any single agent action. For untrusted code, microVM-level isolation is available as an opt-in — set `kata_containers_enabled: true` in `global_config.yaml` to run sandboxes on Kata Containers with Firecracker (`kata-fc`) or QEMU (`kata-qemu`), giving each sandbox its own guest kernel instead of sharing the host's.
+Enables agents to safely execute code and run arbitrary actions in isolated environments, preventing runaway agents from affecting production systems. Each sandbox is a fully self-contained ephemeral Kubernetes pod with its own filesystem and process tree. Policy controls limit the blast radius of any single agent action. For untrusted code, microVM-level isolation is available as an opt-in — set `kata_containers_enabled: true` in `config.agent-toolkit.yaml` (Agent Sandbox settings) to run sandboxes on Kata Containers with Firecracker (`kata-fc`) or QEMU (`kata-qemu`), giving each sandbox its own guest kernel instead of sharing the host's.
 
 **Default provider:** `kubernetes-sigs/agent-sandbox`
 

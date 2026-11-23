@@ -83,16 +83,14 @@ the two templates is `runtimeClassName`.
 ### Enable it
 
 ```yaml
-# env/<name>/config.agent-toolkit.yaml
+# env/<name>/config.agent-toolkit.yaml — Agent Sandbox settings
 agent_sandbox_enabled: true   # required — Kata is an add-on, not a standalone component
-
-# env/<name>/global_config.yaml
 kata_containers_enabled: true
 kata_runtime: "kata-fc"       # kata-fc | kata-qemu | both
 ```
 
 ```yaml
-# env/<name>/global_config.yaml
+# env/<name>/global_config.yaml (optional)
 kata_version: "3.32.0"        # kata-deploy Helm chart version
 ```
 

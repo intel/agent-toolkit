@@ -52,7 +52,10 @@ pgvector_username: "agentuser"
 pgvector_storage_size: "20Gi"
 
 # --- Agent Sandbox ---
-agent_sandbox_enabled: true
+agent_sandbox_enabled: false             # global_config.yaml wins if it sets it too
+# Kata Containers: microVM runtime for Agent Sandbox (kata_containers infrastructure component)
+kata_containers_enabled: false
+kata_runtime: "kata-fc"                   # kata-fc | kata-qemu | both
 agent_sandbox_namespace: "agent-sandbox-system"   # fixed: the upstream manifests and sandbox templates use this namespace
 agent_sandbox_version: "v1.0.10"
 
