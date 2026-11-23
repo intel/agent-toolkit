@@ -133,8 +133,6 @@
           ansible.builtin.command:
             cmd: bash infra/space/kind/scripts/build-rust-artifacts.sh
             chdir: "{{ space_src_dir }}"
-          async: 14400
-          poll: 30
           changed_when: true
 
         - name: "space | build | Build the service images"
@@ -148,8 +146,6 @@
           loop: "{{ space_images | selectattr('name', 'in', _space_missing.stdout_lines) | list }}"
           loop_control:
             label: "{{ item.name }}"
-          async: 3600
-          poll: 15
           changed_when: true
 
         # The seed bakes in the sandbox SSH public key (generated once under $HOME)
@@ -164,8 +160,6 @@
           args:
             chdir: "{{ space_src_dir }}"
             executable: /bin/bash
-          async: 7200
-          poll: 30
           changed_when: true
           when: "'space-seed-publish' in _space_missing.stdout_lines"
 
