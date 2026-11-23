@@ -4,6 +4,8 @@
 # `docker` for upstream SPACE's build scripts on a cluster node, which runs no
 # Docker: `docker build` becomes buildctl on the SPACE BuildKit (images go into
 # containerd's k8s.io namespace), and every other command goes to nerdctl there.
+# Like Docker, a FROM image built earlier is used locally (image-resolve-mode=local:
+# prefer the local image, pull only when it is missing).
 set -euo pipefail
 NS=k8s.io
 BUILDKIT=unix:///run/space-buildkit/buildkitd.sock
@@ -65,8 +67,17 @@ done
 [[ -n $ctx ]] || { echo "docker shim: no build context" >&2; exit 2; }
 [[ $file == /* ]] || file=$PWD/$file
 
+# Store tags under their full names, as Docker does, so a later FROM finds them
+normalize() {
+  local first=${1%%/*}
+  if [[ $1 != */* ]]; then echo "docker.io/library/$1"
+  elif [[ $first != *.* && $first != *:* && $first != localhost ]]; then echo "docker.io/$1"
+  else echo "$1"; fi
+}
 if ((${#tags[@]})); then
-  outputs+=("type=image,\"name=$(IFS=,; echo "${tags[*]}")\",unpack=true")
+  names=()
+  for t in "${tags[@]}"; do names+=("$(normalize "$t")"); done
+  outputs+=("type=image,\"name=$(IFS=,; echo "${names[*]}")\",unpack=true")
 fi
 out_args=()
 for o in "${outputs[@]}"; do out_args+=(--output "$o"); done
@@ -75,4 +86,5 @@ exec buildctl --addr "$BUILDKIT" build --progress=plain \
   --frontend dockerfile.v0 \
   --local context="$ctx" --local dockerfile="$(dirname "$file")" \
   --opt filename="$(basename "$file")" \
+  --opt image-resolve-mode=local \
   "${opts[@]}" "${out_args[@]}"
