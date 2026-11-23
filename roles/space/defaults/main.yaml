@@ -15,8 +15,8 @@ space_sandbox_namespace: "sandboxes"
 # Build (installer host). Upstream publishes no images, so they are built from
 # space_rev and imported into containerd on the nodes.
 space_src_dir: "{{ lookup('env', 'HOME') }}/.cache/ai-solutions/space/src"
-space_build_dir: "{{ space_src_dir }}/../build"
-space_values_file: "{{ space_src_dir }}/../install-values.yaml"
+space_build_dir: "{{ space_src_dir | dirname }}/build"
+space_values_file: "{{ space_src_dir | dirname }}/install-values.yaml"
 space_build_min_free_gb: 40
 space_image_tag: "{{ space_rev[:12] }}"
 space_image_prefix: "localhost/space"
