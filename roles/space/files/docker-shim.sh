@@ -28,7 +28,7 @@ if [[ ${1:-} != build ]]; then
 fi
 shift
 
-opts=() tags=() outputs=() file=Dockerfile ctx=""
+opts=() tags=() outputs=() file="" ctx=""
 # Predefined build args, as Docker passes them: RUN steps reach the network through the proxy
 for v in "${proxy_vars[@]}"; do opts+=(--opt "build-arg:$v=${!v}"); done
 add_context() { # name=value, value a directory or a docker-image:// ref
@@ -65,6 +65,8 @@ while (($#)); do
   esac
 done
 [[ -n $ctx ]] || { echo "docker shim: no build context" >&2; exit 2; }
+# As Docker: no -f means <context>/Dockerfile; a relative -f is relative to the working directory
+if [[ -z $file ]]; then file=$ctx/Dockerfile; fi
 [[ $file == /* ]] || file=$PWD/$file
 
 # Store tags under their full names, as Docker does, so a later FROM finds them
