@@ -18,6 +18,8 @@ claw_image_buildkit_sha256: 9993fdd8b454e541ac14a1adf4bf53d271dbc8f3aafde45894bf
 claw_image_buildkit_url: "https://github.com/moby/buildkit/releases/download/{{ claw_image_buildkit_version }}/buildkit-{{ claw_image_buildkit_version }}.linux-amd64.tar.gz"
 claw_image_root: /var/lib/agent-toolkit/claw-image
 claw_image_build_timeout: 1800
+# Where Kubespray configures containerd; the build uses the runc it names.
+claw_image_containerd_config: /etc/containerd/config.toml
 # Local build output never reaches the image, its tag or the upload.
 claw_image_exclude: [__pycache__, "*.pyc", node_modules, dist, dist-test, .next, next-env.d.ts, tsconfig.tsbuildinfo]
 # The packed context on the installer host; removed after each run.

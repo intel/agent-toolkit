@@ -85,6 +85,22 @@
         state: stopped
       failed_when: false
 
+    # BuildKit's OCI worker needs runc. Kubespray installs it into its bin_dir, which is not
+    # on PATH on a single-node (localhost) install, so take the runc containerd runs pods with
+    # and fall back to PATH.
+    - name: "claw_image | Find runc"
+      ansible.builtin.shell: |
+        set -o pipefail
+        bin=$(sed -n 's/^[[:space:]]*BinaryName[[:space:]]*=[[:space:]]*"\(.*runc\)"/\1/p' \
+              {{ claw_image_containerd_config | quote }} 2>/dev/null | head -n1)
+        [ -n "$bin" ] && [ -x "$bin" ] || bin=$(command -v runc || true)
+        printf '%s\n' "$bin"
+      args:
+        executable: /bin/bash
+      register: _ci_runc
+      changed_when: false
+      failed_when: _ci_runc.rc != 0 or not _ci_runc.stdout
+
     # Transient unit: nothing keeps running once the build is done.
     - name: "claw_image | Start BuildKit"
       ansible.builtin.command:
@@ -100,6 +116,7 @@
           - --root={{ claw_image_root }}/buildkit-state
           - --addr={{ _ci_sock }}
           - --oci-worker=true
+          - "--oci-worker-binary={{ _ci_runc.stdout }}"
           - --containerd-worker=false
       changed_when: true
 
