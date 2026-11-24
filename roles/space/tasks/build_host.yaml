@@ -47,6 +47,23 @@
         include: [bin/buildkitd, bin/buildctl]
       when: not _space_buildkitd.stat.exists
 
+    # A single-node kubespray keeps runc in <kubespray_dir>/bin and names it only in the
+    # CRI config, but BuildKit's containerd worker and nerdctl look it up on containerd's PATH
+    - name: "space | build | Find runc on containerd's PATH"
+      ansible.builtin.command: env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin which runc
+      register: _space_runc
+      changed_when: false
+      failed_when: false
+
+    - name: "space | build | Put kubespray's runc on containerd's PATH"
+      ansible.builtin.file:
+        src: "{{ kubespray_dir }}/bin/runc"
+        dest: /usr/local/bin/runc
+        state: link
+      when:
+        - _space_runc.rc != 0
+        - kubespray_dir is defined
+
     # A containerd worker, so images land where kubelet finds them
     - name: "space | build | Install the BuildKit unit"
       ansible.builtin.template:
