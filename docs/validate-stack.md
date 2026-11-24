@@ -107,7 +107,7 @@ A healthy stack ends with `failed=0` in the run's recap.
 | Agent toolkit | Redis Stack, pgvector | Pods, Redis PING and RediSearch, pgvector extension and credentials |
 | | Agent Sandbox | Controller, router, CRDs, templates, warm pools (and the Kata template) |
 | | OpenShell, KubeRay | Gateway ready; operator and head pod |
-| | SPACE (when enabled) | Deployments and DaemonSets ready; a sandbox created, run and deleted through the API |
+| | SPACE (when enabled) | Deployments and DaemonSets ready; a microVM sandbox created, run and deleted through the native API and through the E2B SDK |
 
 Not in this release: burn tests, the proxy checks and a post-deploy report file. Node-level checks (time sync, disk, swap, CPU governor, THP, DNS, gateway) are in the [preflight](#preflight-check--pre-install).
 

@@ -56,7 +56,15 @@ space_internet_except:
   - 192.168.0.0/16
   - 169.254.0.0/16
 
-# Service API key minted for agents (Secret space-api-key, key E2B_API_KEY)
+# E2B-compatible API (ECW): clients use E2B_DOMAIN=<space_e2b_domain>
+space_e2b_enabled: true
+space_e2b_domain: "e2b.{{ base_domain_name | default('example.com') }}"
+space_e2b_api_hostname: "api.{{ space_e2b_domain }}"
+space_e2b_listener: "https-{{ space_e2b_domain | replace('.', '-') }}"   # gateway_extra_wildcard_domains listener
+space_e2b_sdk_version: "2.21.1"   # the SDK upstream tests ECW with (validate)
+
+# Service API keys minted for agents (Secret space-api-key: SPACE_API_TOKEN for the
+# native API, E2B_API_KEY for ECW; one surface each)
 space_api_key_org: "ai-solutions"
 space_api_key_user: "agents@{{ base_domain_name | default('ai-solutions.local') }}"
 

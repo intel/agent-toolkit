@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 # =============================================================================
-# SPACE — publish one service on the platform gateway (space_route)
+# SPACE — publish (or unpublish) one service on the platform gateway (space_route)
 # Through the core gateway role, as other components publish. SPACE
 # authenticates every request with its own API key, so the route is exempt
 # from the gateway's Keycloak JWT.
@@ -11,7 +11,7 @@
 - name: "space | {{ space_route.name }} | Publish the host"
   ansible.builtin.include_role:
     name: gateway
-    tasks_from: "{{ 'publish.yaml' if _space_public | bool else 'unpublish.yaml' }}"
+    tasks_from: "{{ 'publish.yaml' if space_route.enabled | bool else 'unpublish.yaml' }}"
   vars:
     gateway_publish_name: "{{ space_route.name }}"
     gateway_publish_namespace: "{{ space_namespace }}"
@@ -20,7 +20,7 @@
 
 - name: "space | {{ space_route.name }} | Route"
   kubernetes.core.k8s:
-    state: "{{ 'present' if _space_public | bool else 'absent' }}"
+    state: "{{ 'present' if space_route.enabled | bool else 'absent' }}"
     definition:
       apiVersion: gateway.networking.k8s.io/v1
       kind: HTTPRoute
@@ -29,7 +29,10 @@
         namespace: "{{ space_namespace }}"
         labels: {app.kubernetes.io/part-of: space}
       spec:
-        parentRefs: "{{ [gateway_publish.parent_ref] if _space_public | bool else [] }}"
+        # E2B's wildcard needs its own listener (gateway_extra_wildcard_domains)
+        parentRefs: >-
+          {{ [gateway_publish.parent_ref | combine({'sectionName': space_route.section} if space_route.section | default('') else {})]
+             if space_route.enabled | bool else [] }}
         hostnames: ["{{ space_route.host }}"]
         rules:
           - timeouts: {request: "{{ space_route.timeout }}"}
@@ -42,4 +45,4 @@
   vars:
     gateway_route_name: "{{ space_route.name }}"
     gateway_route_namespace: "{{ space_namespace }}"
-    gateway_route_state: "{{ 'present' if _space_public | bool else 'absent' }}"
+    gateway_route_state: "{{ 'present' if space_route.enabled | bool else 'absent' }}"

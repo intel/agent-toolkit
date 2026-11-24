@@ -3,6 +3,7 @@
 # Values for upstream infra/space/cluster/install.sh, from its values.example.yaml.
 # Both releases (space, space-builder) read this file.
 {% macro img(name) %}{repository: {{ space_image_prefix }}/{{ name }}, tag: "{{ space_image_tag }}", pullPolicy: IfNotPresent}{% endmacro %}
+{% set ecw_hosts = ([{'apiHost': space_e2b_api_hostname, 'host': space_e2b_domain}] | to_json) if space_e2b_enabled | bool else '' %}
 global:
   observability:
     mode: "off"
@@ -33,6 +34,8 @@ space-api-local:
   postgres: *db
   # Data-plane origin the API gives clients for command streams and files
   dataPlanePublicUrl: "{{ ('https://' ~ space_data_plane_hostname) if _space_public | default(false) | bool else '' }}"
+  # E2B-compatible API: the API host and the sandbox-traffic base host
+  ecwHosts: {{ ecw_hosts | to_json }}
   entry:
     type: ClusterIP
 
@@ -57,6 +60,7 @@ space-credmgr-authority-local:
 
 space-data-plane-local:
   image: {{ img('space-data-plane') }}
+  ecwHosts: {{ ecw_hosts | to_json }}
   entry:
     type: ClusterIP
 

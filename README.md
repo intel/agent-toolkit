@@ -142,7 +142,7 @@ Enables agents to safely execute code and run arbitrary actions in isolated envi
 
 **Optional provider:** [NVIDIA OpenShell](docs/openshell.md) — policy-enforced sandboxes on top of Agent Sandbox (egress default-deny, L7 rules, Landlock, credential isolation with GenAI Gateway keys). Enable with `openshell_enabled: true` in `config.agent-toolkit.yaml`.
 
-**Optional provider (evaluation):** [Perplexity SPACE](docs/space.md) — Firecracker microVM sandboxes with suspend/resume to object storage, installed next to Agent Sandbox and independent of it. Enable with `space_enabled: true` in `config.agent-toolkit.yaml`.
+**Optional provider (evaluation):** [Perplexity SPACE](docs/space.md) — Firecracker microVM sandboxes with suspend/resume to object storage, used through the E2B SDK (E2B-compatible API) or SPACE's REST API, installed next to Agent Sandbox and independent of it. Enable with `space_enabled: true` in `config.agent-toolkit.yaml`.
 
 ---
 

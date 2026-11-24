@@ -106,9 +106,50 @@
   failed_when: _val_space_smoke.rc != 0 or 'Hello from SPACE' not in _val_space_smoke.stdout
   no_log: "{{ secure_logs | default(true) }}"
 
+# The E2B SDK, as E2B clients use it, through the gateway's E2B listener
+- name: "space | validate | E2B API"
+  when:
+    - space_e2b_enabled | bool
+    - (_val_space_key.resources[0].data | default({})).E2B_API_KEY is defined
+  block:
+    - name: "space | validate | Find the gateway address for E2B"
+      kubernetes.core.k8s_info:
+        kind: Service
+        namespace: "{{ gateway_namespace | default('envoy-gateway-system') }}"
+        label_selectors:
+          - "gateway.envoyproxy.io/owning-gateway-name={{ gateway_name | default('eg-gateway') }}"
+      register: _val_e2b_gateway
+
+    - name: "space | validate | Install the E2B SDK {{ space_e2b_sdk_version }}"
+      ansible.builtin.pip:
+        name: "e2b=={{ space_e2b_sdk_version }}"
+        virtualenv: "{{ space_src_dir | dirname }}/e2b-venv"
+        virtualenv_command: python3 -m venv
+
+    - name: "space | validate | Create an E2B sandbox, run a command and kill it"
+      vars:
+        _ca: "{{ env_dir | default('') }}/logs/ai-solutions-ca.crt"
+        _gateway_ip: "{{ (_val_e2b_gateway.resources | first).status.loadBalancer.ingress[0].ip }}"
+      ansible.builtin.command:
+        argv:
+          - "{{ space_src_dir | dirname }}/e2b-venv/bin/python"
+          - "{{ role_path }}/files/run_via_gateway.py"
+          - "{{ _gateway_ip }}"
+          - ".{{ space_e2b_domain }}"
+          - "{{ role_path }}/files/e2b_smoke.py"
+      # The stack's CA in selfsigned mode; a custom certificate uses the system trust
+      environment: >-
+        {{ {'E2B_API_KEY': _val_space_key.resources[0].data.E2B_API_KEY | b64decode,
+            'E2B_DOMAIN': space_e2b_domain, 'NO_PROXY': '*', 'no_proxy': '*'}
+           | combine({'SSL_CERT_FILE': _ca} if _ca is file else {}) }}
+      register: _val_space_e2b
+      changed_when: false
+      failed_when: _val_space_e2b.rc != 0 or 'Hello from SPACE via E2B' not in _val_space_e2b.stdout
+      no_log: "{{ secure_logs | default(true) }}"
+
 - name: "space | validate | Summary"
   ansible.builtin.debug:
     msg: >-
       SPACE: {{ _val_space_workloads.results[0].resources | length }} Deployments available,
       {{ _val_space_workloads.results[1].resources | length }} DaemonSets ready, sandbox
-      create/exec/delete passed
+      create/exec/delete passed{{ ', E2B SDK create/run/kill passed' if _val_space_e2b is defined and _val_space_e2b is not skipped else '' }}

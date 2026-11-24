@@ -25,6 +25,15 @@
     namespace: "{{ object_store_namespace | default('monitoring') }}"
   failed_when: false
 
+- name: "space | teardown | Remove the E2B listener policy"
+  kubernetes.core.k8s:
+    state: absent
+    api_version: gateway.envoyproxy.io/v1alpha1
+    kind: ClientTrafficPolicy
+    name: space-e2b-listener
+    namespace: "{{ gateway_namespace | default('envoy-gateway-system') }}"
+  failed_when: false
+
 - name: "space | teardown | Delete the SPACE namespaces"
   kubernetes.core.k8s:
     state: absent

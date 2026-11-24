@@ -136,7 +136,6 @@
         HTTPS_PROXY: "{{ https_proxy | default('') }}"
         NO_PROXY: "{{ no_proxy | default('') }}"
       block:
-        # TODO(spike): confirm the release-mode build outside Tilt
         - name: "space | build | Build the Rust artifacts"
           ansible.builtin.command:
             cmd: bash infra/space/kind/scripts/build-rust-artifacts.sh

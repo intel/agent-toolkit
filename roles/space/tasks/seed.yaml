@@ -114,6 +114,74 @@
             SPACE_DATA_PLANE_URL: "http://space-data-plane-entry.{{ space_namespace }}.svc.cluster.local:8090"
       no_log: true
 
+# A key serves one surface, so E2B clients get their own, on the same
+# organization and service user the native key bootstrapped.
+- name: "space | seed | Check for the agents' E2B API key"
+  kubernetes.core.k8s_info:
+    kind: Secret
+    name: space-api-key
+    namespace: "{{ space_namespace }}"
+  register: _space_api_keys
+  no_log: true
+
+- name: "space | seed | Mint the agents' E2B API key"
+  when:
+    - space_e2b_enabled | bool
+    - (_space_api_keys.resources[0].data | default({})).E2B_API_KEY is not defined
+  block:
+    - name: "space | seed | Read the agents' organization and service user"
+      ansible.builtin.command:
+        cmd: >-
+          kubectl exec -n {{ postgresql_namespace | default('postgresql') }}
+          {{ postgresql_cluster_name | default('postgresql') }}-1 -c postgres --
+          psql -U postgres -d space -tA -F ' ' -v ON_ERROR_STOP=1
+          -c "SELECT o.id, u.id FROM organizations o JOIN users u ON u.org_id = o.id
+              WHERE o.slug = '{{ space_api_key_org }}' AND u.email = '{{ space_api_key_user }}'"
+      register: _space_owner
+      changed_when: false
+      failed_when: _space_owner.rc != 0 or (_space_owner.stdout | trim | split(' ') | length) != 2
+
+    - name: "space | seed | Generate the E2B key and its insert SQL"
+      vars:
+        _ids: "{{ _space_owner.stdout | trim | split(' ') }}"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        umask 077
+        token_file=$(mktemp)
+        trap 'rm -f "$token_file"' EXIT
+        openssl rand -hex 32 | tr -d '\n' > "$token_file"
+        sql=$(bash scripts/seed-api-key.sh --surface ecw --token-file "$token_file" \
+          --org-id {{ _ids[0] | quote }} --created-by {{ _ids[1] | quote }} --name agents-e2b \
+          | awk 'f { print } /control-plane DB:$/ { f = 1 }')
+        jq -n --rawfile token "$token_file" --arg sql "$sql" '{token: $token, sql: $sql}'
+      args:
+        chdir: "{{ space_src_dir }}"
+        executable: /bin/bash
+      register: _space_e2b_key
+      changed_when: true
+      no_log: true
+
+    - name: "space | seed | Insert the E2B key into the SPACE database"
+      ansible.builtin.command:
+        cmd: >-
+          kubectl exec -i -n {{ postgresql_namespace | default('postgresql') }}
+          {{ postgresql_cluster_name | default('postgresql') }}-1 -c postgres --
+          psql -U postgres -d space -v ON_ERROR_STOP=1
+        stdin: "{{ (_space_e2b_key.stdout | from_json).sql }}"
+      changed_when: true
+      no_log: true
+
+    - name: "space | seed | Store the agents' E2B API key"
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata: {name: space-api-key, namespace: "{{ space_namespace }}"}
+          stringData:
+            E2B_API_KEY: "{{ (_space_e2b_key.stdout | from_json).token }}"
+      no_log: true
+
 # Kept current on every run, so turning the routes on or off updates them
 - name: "space | seed | Record the public URLs with the API key"
   kubernetes.core.k8s:
@@ -125,3 +193,4 @@
       stringData:
         SPACE_API_PUBLIC_URL: "{{ ('https://' ~ space_api_hostname) if _space_public | bool else '' }}"
         SPACE_DATA_PLANE_PUBLIC_URL: "{{ ('https://' ~ space_data_plane_hostname) if _space_public | bool else '' }}"
+        E2B_DOMAIN: "{{ space_e2b_domain if _space_e2b | bool else '' }}"
