@@ -43,3 +43,17 @@ Complete all [prerequisites](./prerequisites.md).
 | Hybrid Router | Complexity-aware, cost/latency-optimizing inference routing for the GenAI Gateway | [Hybrid Router Guide](hybrid-router.md) |
 | Intel® Arc™ (XPU) GPU | Deploy vLLM models on Intel discrete GPUs (Arc/Flex/Max, incl. Battlemage) via `compute_platform=xpu`. **Note:** not available in this release. | [Intel Arc XPU Guide](intel-arc-xpu-deployment.md) |
 | Stack Validation | Post-deploy health checks, preflight node readiness, burn tests, and traffic-light reporting | [Validate Stack Guide](validate-stack.md) |
+
+## Dependency updates
+
+The repository's [Renovate configuration](../renovate.json) schedules update
+pull requests weekly and leaves merging to maintainers. It covers the Agent
+Sandbox release and KubeRay operator chart, in addition to supported manifests.
+An authorized Renovate installation is required to run it.
+
+Ray image updates are disabled until its image and chart application version
+can be updated together. OpenShell version automation and components owned by
+other repositories are not covered by the custom rules. Dependency PRs require
+compatibility review and deployment validation; existing lint and security
+checks do not validate the deployed stack. Existing environment overrides may
+also need separate updates.
