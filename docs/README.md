@@ -52,8 +52,11 @@ Sandbox release and KubeRay operator chart, in addition to supported manifests.
 An authorized Renovate installation is required to run it.
 
 Ray image updates are disabled until its image and chart application version
-can be updated together. OpenShell version automation and components owned by
-other repositories are not covered by the custom rules. Dependency PRs require
-compatibility review and deployment validation; existing lint and security
-checks do not validate the deployed stack. Existing environment overrides may
-also need separate updates.
+can be updated together. OpenShell version automation is not enabled: the
+configured GHCR chart reference currently resolves only the pinned `0.1.6`,
+while newer upstream chart releases are published at a different Quay OCI
+reference. Migrate and validate that chart source before adding automated
+version updates. Components owned by other repositories are not covered by the
+custom rules. Dependency PRs require compatibility review and deployment
+validation; existing lint and security checks do not validate the deployed
+stack. Existing environment overrides may also need separate updates.
