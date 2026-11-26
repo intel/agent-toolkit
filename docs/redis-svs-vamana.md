@@ -161,7 +161,16 @@ Intel® Xeon® 6 (6783P-C), single-node cluster, Redis 8.10.3 with 16 search thr
 
 **In a real agent** (LLM on CPU, about 16 s per turn), memory search was under 0.2% of task time with every index type, even with 100,000 memories per user.
 
-Upgrading Redis Stack 7.4 to Redis 8.10.3 gave about 7× more searches per second at the same accuracy (6,460 → 46,967) and about 5× faster index builds, mostly from the search threads.
+**Redis Stack 7.4 compared with Redis 8.10.3** (100,000 × 768-d vectors, `BAAI/bge-base-en-v1.5`, search window 40, 32 clients):
+
+| Redis and index | Recall@10 | Searches per second | Index memory | Build time |
+|---|---|---|---|---|
+| Redis Stack 7.4.7, HNSW (before this upgrade) | 0.949 | 6,460 | 329 MB | 52 s |
+| Redis 8.10.3, HNSW | 0.950 | 45,687 | 327 MB | 15 s |
+| Redis 8.10.3, SVS-VAMANA | 0.966 | 40,314 | 308 MB | 14 s |
+| Redis 8.10.3, SVS-VAMANA + LVQ8 (`GlobalSQ8`) | 0.959 | 46,967 | 89 MB | 10 s |
+
+The upgrade alone gives about **7× more searches per second** and **5× faster index builds** with any index, mostly from Redis 8.10's 16 search threads (the default). SVS-VAMANA with compression cuts index memory by **about 73%**.
 
 ## Limits
 
