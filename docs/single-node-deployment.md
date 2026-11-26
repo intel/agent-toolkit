@@ -331,7 +331,7 @@ kubectl get secret redis-stack-server-credentials -n redis \
 
 ### Redis security notes
 
-- **Authentication is mandatory.** The chart fails to render if no password is supplied. Redis with `nopass` allows any client that can reach the port to read and modify all agent session data and to execute arbitrary Lua and JavaScript (via RedisGears) on the server.
+- **Authentication is mandatory.** The chart fails to render if no password is supplied. Redis with `nopass` allows any client that can reach the port to read and modify all agent session data and to run arbitrary Lua scripts on the server.
 - **The Service is `ClusterIP`**, reachable only from inside the cluster. Do not change it to `NodePort` or `LoadBalancer` — that publishes Redis on every node IP in the 30000-32767 range. If you need external access, use `kubectl port-forward` instead.
 - **Mesh-only access.** Redis runs in the ambient mesh: namespaces in the mesh reach it, plaintext clients from outside are refused.
 - **Password rotation** is not automated in this release.
