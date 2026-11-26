@@ -542,6 +542,7 @@ finally:
 
 Use **Direct Mode** with the sandbox-router's in-cluster DNS URL.
 No RBAC changes are needed — the router handles all Kubernetes API calls.
+With Istio on, run the agent in a namespace labelled `istio.io/dataplane-mode=ambient`: the router is in the mesh with strict mTLS and refuses plain-text callers.
 
 ```python
 import os

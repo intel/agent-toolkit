@@ -81,6 +81,32 @@
   vars:
     _authz_args: "- --cache-enabled=true\n        - --authz-mode=tokenreview\n        - --authz-tokenreview-require-token=true"
 
+# In the ambient mesh, callers reach the router through ztunnel on TCP 15008 (HBONE), whatever the target port.
+# The upstream router policy has no 15008 rule; NetworkPolicies add up, so this one adds it.
+- name: "agent_sandbox | Allow ambient mesh traffic to sandbox-router"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: sandbox-router-mesh
+        namespace: "{{ agent_sandbox_namespace }}"
+        labels:
+          app.kubernetes.io/managed-by: agentic-ai-stack
+      spec:
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: sandbox-router
+            app.kubernetes.io/component: sandbox-router
+        policyTypes: [Ingress]
+        ingress:
+          - from:
+              - namespaceSelector: {}
+            ports:
+              - {protocol: TCP, port: 15008}
+  when: istio_enabled | default(false) | bool
+
 - name: "agent_sandbox | Wait for sandbox-router to be ready"
   kubernetes.core.k8s_info:
     kind: Deployment
