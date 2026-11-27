@@ -30,6 +30,10 @@ spec:
     spec:
       terminationGracePeriodSeconds: 10
       securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ .Values.redis_stack_server.securityContext.runAsUser }}
+        runAsGroup: {{ .Values.redis_stack_server.securityContext.runAsGroup }}
+        fsGroup: {{ .Values.redis_stack_server.securityContext.fsGroup }}
         seccompProfile:
           type: RuntimeDefault
       {{- if .Values.redis_stack_server.affinity }}
@@ -59,9 +63,10 @@ spec:
             secretKeyRef:
               name: "{{ .Values.name }}-credentials"
               key: REDIS_PASSWORD
-        # redis-stack-server appends REDIS_ARGS to the redis-server command line.
-        - name: REDIS_ARGS
-          value: "--requirepass $(REDIS_PASSWORD)"
+        # The redis image passes these to redis-server; Kubernetes expands $(REDIS_PASSWORD).
+        args:
+        - "--requirepass"
+        - "$(REDIS_PASSWORD)"
         {{- end }}
         volumeMounts:
         - name: db

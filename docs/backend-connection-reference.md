@@ -6,7 +6,7 @@ All shared backends are deployed into their own namespaces and are reachable fro
 
 | Instance | Kubernetes Service | URL | Scope |
 |---|---|---|---|
-| **Redis Stack** (`redis_stack_enabled: true`) | `redis-stack-server.redis.svc.cluster.local:6379` (ClusterIP) | `redis://default:<password>@redis-stack-server.redis.svc.cluster.local:6379` | All namespaces (in-cluster only) |
+| **Redis 8** (`redis_stack_enabled: true`) | `redis-stack-server.redis.svc.cluster.local:6379` (ClusterIP) | `redis://default:<password>@redis-stack-server.redis.svc.cluster.local:6379` | All namespaces (in-cluster only) |
 
 Redis requires a password. The credentials and the full URL are stored in the `redis-stack-server-credentials` Secret:
 
@@ -25,6 +25,8 @@ kubectl exec -n redis redis-stack-server-0 -- sh -c \
 # PONG
 ```
 
+> Redis 8 has the FLAT, HNSW and SVS-VAMANA vector indexes built in. See [redis-svs-vamana.md](redis-svs-vamana.md) to choose one.
+>
 > The `default:` username in the URL is required — Redis 6+ rejects the `redis://:<password>@...` form with `WRONGPASS`.
 > The Service is `ClusterIP` and a NetworkPolicy is applied; Redis is not reachable from outside the cluster. Use `kubectl port-forward` for local access instead of changing the Service type.
 

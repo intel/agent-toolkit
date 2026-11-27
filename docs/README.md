@@ -40,6 +40,7 @@ Complete all [prerequisites](./prerequisites.md).
 
 | Feature | Description | Guide |
 |---|---|---|
+| SVS-VAMANA Vector Index | When and how agent apps use the SVS-VAMANA vector index (and compression) in the shared Redis 8 | [SVS-VAMANA Guide](redis-svs-vamana.md) |
 | Hybrid Router | Complexity-aware, cost/latency-optimizing inference routing for the GenAI Gateway | [Hybrid Router Guide](hybrid-router.md) |
 | Intel® Arc™ (XPU) GPU | Deploy vLLM models on Intel discrete GPUs (Arc/Flex/Max, incl. Battlemage) via `compute_platform=xpu`. **Note:** not available in this release. | [Intel Arc XPU Guide](intel-arc-xpu-deployment.md) |
 | Stack Validation | Post-deploy health checks, preflight node readiness, burn tests, and traffic-light reporting | [Validate Stack Guide](validate-stack.md) |

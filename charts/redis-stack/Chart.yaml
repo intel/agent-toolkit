@@ -1,9 +1,9 @@
 apiVersion: v2
 name: redis
-description: Standalone Redis Stack (with RediSearch) for shared use by agentic workloads
+description: Standalone Redis 8 (search, JSON, SVS-VAMANA vector index) for shared use by agentic workloads
 type: application
 version: 0.1.0
-appVersion: "7.4.0"
+appVersion: "8.10.3"
 keywords:
   - redis
   - memory

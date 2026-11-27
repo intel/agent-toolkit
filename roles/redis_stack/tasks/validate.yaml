@@ -62,9 +62,61 @@
       {{ (_val_modules.stdout | default('') ~ ' ' ~ _val_modules.stderr | default('') ~ ' ' ~ _val_modules.msg | default('')) | trim }}
     quiet: true
 
+# Creates and drops a tiny SVS-VAMANA index; fails on a Redis without it (< 8.2).
+# The index gets a new name on every run, so a test index left by an interrupted
+# run, or a run at the same time, cannot make this check fail.
+- name: "redis_stack | validate | Name the test SVS-VAMANA index"
+  ansible.builtin.set_fact:
+    _val_svs_index: "_validate_svs_{{ lookup('ansible.builtin.password', '/dev/null', chars=['ascii_lowercase', 'digits'], length=10) }}"
+
+- name: "redis_stack | validate | Check SVS-VAMANA"
+  block:
+    - name: "redis_stack | validate | Create a test SVS-VAMANA index"
+      kubernetes.core.k8s_exec:
+        namespace: "{{ redis_stack_namespace }}"
+        pod: "{{ _val_pods.resources[0].metadata.name }}"
+        command: "redis-cli {{ ('-a ' ~ (_redis_pass.stdout | trim | quote) ~ ' --no-auth-warning ') if (_redis_pass.stdout | default('') | trim | length > 0) else '' }}FT.CREATE {{ _val_svs_index }} ON HASH PREFIX 1 {{ _val_svs_index }}: SCHEMA v VECTOR SVS-VAMANA 6 TYPE FLOAT32 DIM 4 DISTANCE_METRIC COSINE"
+      register: _val_svs
+      failed_when: false
+      changed_when: false
+      no_log: true
+  always:
+    # Runs even if the create step fails, so the test index is removed whenever it exists.
+    - name: "redis_stack | validate | Drop the test SVS-VAMANA index"
+      kubernetes.core.k8s_exec:
+        namespace: "{{ redis_stack_namespace }}"
+        pod: "{{ _val_pods.resources[0].metadata.name }}"
+        command: "redis-cli {{ ('-a ' ~ (_redis_pass.stdout | trim | quote) ~ ' --no-auth-warning ') if (_redis_pass.stdout | default('') | trim | length > 0) else '' }}FT.DROPINDEX {{ _val_svs_index }}"
+      register: _val_svs_drop
+      when: "'OK' in _val_svs.stdout | default('')"
+      failed_when: false
+      changed_when: false
+      no_log: true
+
+- name: "redis_stack | validate | Assert SVS-VAMANA is available"
+  ansible.builtin.assert:
+    that: "'OK' in _val_svs.stdout | default('')"
+    fail_msg: >-
+      SVS-VAMANA index could not be created (needs Redis 8.2+):
+      {{ (_val_svs.stdout | default('') ~ ' ' ~ _val_svs.stderr | default('') ~ ' ' ~ _val_svs.msg | default('')) | trim }}
+    quiet: true
+
+# A failed clean-up is not a missing feature: warn, do not fail.
+- name: "redis_stack | validate | Warn if the test SVS-VAMANA index was not removed"
+  ansible.builtin.debug:
+    msg: >-
+      SVS-VAMANA works, but the test index {{ _val_svs_index }} could not be dropped:
+      {{ (_val_svs_drop.stdout | default('') ~ ' ' ~ _val_svs_drop.stderr | default('') ~ ' ' ~ _val_svs_drop.msg | default('')) | trim }}.
+      Remove it with: FT.DROPINDEX {{ _val_svs_index }}
+  when:
+    - _val_svs_drop is not skipped
+    - "'OK' not in _val_svs_drop.stdout | default('')"
+
 - name: "redis_stack | validate | Summary"
   ansible.builtin.debug:
     msg:
       - "Redis pods: OK ({{ _val_pods.resources | length }} running)"
       - "Redis PING: {{ 'OK' if 'PONG' in _val_ping.stdout | default('') else 'FAIL' }}"
       - "RediSearch module: {{ 'OK' if 'search' in _val_modules.stdout | default('') else 'FAIL' }}"
+      - "SVS-VAMANA index: {{ 'OK' if 'OK' in _val_svs.stdout | default('') else 'FAIL' }}"
+      - "SVS-VAMANA test index cleanup: {{ 'OK' if 'OK' in _val_svs_drop.stdout | default('') else ('SKIPPED' if _val_svs_drop is skipped else 'FAIL') }}"

@@ -358,7 +358,7 @@ kubectl get secret redis-stack-server-credentials -n redis \
 
 ### Redis security notes
 
-Redis holds agent session state and is a code-execution surface (Lua, plus JavaScript via RedisGears), so it must never be reachable unauthenticated.
+Redis holds agent session state and is a code-execution surface (Lua scripts), so it must never be reachable unauthenticated.
 
 - **Authentication is mandatory** — the chart fails to render without a password.
 - **The Service is `ClusterIP`.** Do not switch it to `NodePort` or `LoadBalancer`. On a multi-node cluster a NodePort binds the 30000-32767 range on *every* node IP, so anything that can route to any node reaches Redis. This matters most when nodes have public addresses or sit in a permissive cloud security group.
