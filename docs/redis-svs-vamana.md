@@ -121,11 +121,36 @@ RedisVL uses its own build defaults (`graph_max_degree` 40, `construction_window
 
 Redis 8.10 searches with 16 worker threads by default (fewer if Redis sees fewer CPU cores). Check with `CONFIG GET search-workers`.
 
-After a change to `redis_stack_image` or `redis_stack_tag`, upgrade Redis alone. Data is kept:
+After a change to `redis_stack_image` or `redis_stack_tag`, upgrade Redis alone. Data is kept.
+
+**Before you upgrade from Redis Stack 7.4: storage permissions.** Redis 8 runs as UID 999; Redis Stack 7.4 ran as root. Redis 8 must be able to read the old data (`dump.rdb`) and write to its data folder. Storage that applies the pod's `fsGroup` (local-path, Ceph, and the toolkit's own NFS) needs nothing. For other storage, check first:
+
+```bash
+kubectl exec -n redis redis-stack-server-0 -- ls -lan /data
+```
+
+If the folder is not writable by UID or GID 999, or `dump.rdb` is not readable by them, stop Redis and give the files to UID 999 on the storage itself. The Redis pod cannot do it: it drops all Linux capabilities, so it cannot change file owners.
+
+```bash
+kubectl scale statefulset -n redis redis-stack-server --replicas=0
+PV=$(kubectl get pvc -n redis db-redis-stack-server-0 -o jsonpath='{.spec.volumeName}')
+kubectl get pv "$PV" -o jsonpath='{.spec.hostPath.path}{.spec.csi.volumeAttributes}{"\n"}'   # node folder, or NFS server, share and subdir
+sudo chown -R 999:999 <that folder>          # on that node or on the NFS server
+```
+
+The upgrade below starts Redis again.
 
 ```bash
 ./es_auto_installer.sh install redis_stack --only
 ./es_auto_installer.sh validate redis_stack --only    # includes an SVS-VAMANA check
+```
+
+After the upgrade, check that Redis can save:
+
+```bash
+kubectl exec -n redis redis-stack-server-0 -- sh -c \
+  'redis-cli -a "$REDIS_PASSWORD" --no-auth-warning BGSAVE; sleep 2; redis-cli -a "$REDIS_PASSWORD" --no-auth-warning INFO persistence | grep rdb_last_bgsave_status'
+# rdb_last_bgsave_status:ok
 ```
 
 ## Measured results
@@ -170,7 +195,7 @@ Intel® Xeon® 6 (6783P-C), single-node cluster, Redis 8.10.3 with 16 search thr
 | Redis 8.10.3, SVS-VAMANA | 0.966 | 40,314 | 308 MB | 14 s |
 | Redis 8.10.3, SVS-VAMANA + LVQ8 (`GlobalSQ8`) | 0.959 | 46,967 | 89 MB | 10 s |
 
-The upgrade alone gives about **7× more searches per second** and **5× faster index builds** with any index, mostly from Redis 8.10's 16 search threads (the default). SVS-VAMANA with compression cuts index memory by **about 73%**.
+With the same index (HNSW), the upgrade alone gives about **7× more searches per second** (6,460 → 45,687) and **3.5× faster index builds** (52 s → 15 s), mostly from Redis 8.10's 16 search threads (the default). Switching to SVS-VAMANA with compression also cuts index memory by **about 73%** (327 MB → 89 MB) and builds in 10 s.
 
 ## Limits
 
