@@ -1,45 +1,71 @@
-# Quick Start — Intel® Agent Toolkit
+# Intel® Agent Toolkit documentation
 
+<p align="center">
+  <img src="assets/banner.jpg" alt="Intel® Agent Toolkit">
+</p>
 
-> **Installing this release.** [Toolkit Manager](https://github.com/intel/enterprise-ai-solutions) installs and operates Intel® Agent Toolkit. Run the commands in these docs from an `enterprise-ai-solutions` checkout:
->
-> ```bash
-> git clone -b release-1.2 https://github.com/intel/enterprise-ai-solutions.git && cd enterprise-ai-solutions
-> ./es_auto_installer.sh configure
-> ./es_auto_installer.sh init agent-toolkit       # creates env/local/
-> ./es_auto_installer.sh install agent-toolkit
-> export KUBECONFIG=$PWD/env/local/kubeconfig.yaml   # the kubectl commands in these docs use it
-> ```
->
-> The `agentic-config.cfg` switches these docs mention are settings in `env/<name>/`:
->
-> | Classic switch | Setting | File |
-> |---|---|---|
-> | `deploy_agent_sandbox`, `deploy_redis`, `deploy_pgvector` | `agent_sandbox_enabled`, `redis_stack_enabled`, `pgvector_enabled` (on) | `config.agent-toolkit.yaml` |
-> | `deploy_openshell`, `deploy_kuberay` | `openshell_enabled`, `kuberay_enabled` (off) | `config.agent-toolkit.yaml` |
-> | `deploy_genai_gateway`, `deploy_guardrails` | `auth_provider: "litellm"` (set by `init agent-toolkit`); `guardrails_enabled` | `global_config.yaml`; `config.agent-toolkit.yaml` |
-> | `deploy_vllm_sr` | `vllm_sr_enabled` | `config.inference.yaml` |
-> | `deploy_kata_containers` | `kata_containers_enabled`, `kata_runtime` | `global_config.yaml` |
-> | `deploy_llm_models`, `models=` | `llm_services_autodeploy_models`; `./model-manager deploy <name>` | `config.agent-toolkit.yaml` |
-> | `deploy_istio`, `deploy_observability`, `deploy_ceph`, `deploy_kubernetes_fresh` | `istio_enabled`, `observability_enabled`, `storage_backend`, `existing_kubernetes` | `global_config.yaml` |
->
-> Remove the toolkit with `./es_auto_installer.sh teardown agent-toolkit`, or the whole cluster with `teardown infrastructure`. Not in this release: the Flowise plugin, Intel® Arc™ (XPU) deployment and rack-scale networking.
+The technical documentation for Intel® Agent Toolkit. Start with **Meet** for the what and why, **Get started** to stand it up, then **Deployment**, **Customize**, **Operate**, or **Reference** as you need them.
 
-## Prerequisites
-Complete all [prerequisites](./prerequisites.md).
+> [!IMPORTANT]
+> Toolkit Manager installs and operates this toolkit. Clone **that** repository, run every command from its root, and `init agent-toolkit` will fetch this one into `ext/` for you. See [Meet the Agent Toolkit](overview/meet.md).
 
-## Deployment Options
+## Meet
 
-| Deployment Option | Description | Guide |
-|---|---|---|
-| Single Node | Quick start for testing or lightweight workloads on a single Intel® Xeon® server | [Single Node Guide](single-node-deployment.md) |
-| Single Master, Multiple Workers | For higher throughput workloads with one control-plane and N worker nodes | [Multi-Node Guide](multi-node-deployment.md) |
-| Docker Compose | Simplified single-node deployment for development, demos, and resource-constrained environments | [Docker Guide](../docker/README.md) |
+| Guide | What it covers |
+|---|---|
+| [Meet the Agent Toolkit](overview/meet.md) | What it is, why it exists, when to choose it, and which repository to clone |
+| [FAQ](faq-and-troubleshooting/frequently-asked-questions.md) | Short answers to the questions that come up most |
+| [Glossary](reference/glossary.md) | Terms used across these guides, defined once |
 
-## Feature Guides
+## Get started
 
-| Feature | Description | Guide |
-|---|---|---|
-| Hybrid Router | Complexity-aware, cost/latency-optimizing inference routing for the GenAI Gateway | [Hybrid Router Guide](hybrid-router.md) |
-| Intel® Arc™ (XPU) GPU | Deploy vLLM models on Intel discrete GPUs (Arc/Flex/Max, incl. Battlemage) via `compute_platform=xpu`. **Note:** not available in this release. | [Intel Arc XPU Guide](intel-arc-xpu-deployment.md) |
-| Stack Validation | Post-deploy health checks, preflight node readiness, burn tests, and traffic-light reporting | [Validate Stack Guide](validate-stack.md) |
+| Guide | What it covers |
+|---|---|
+| [Prerequisites](getting-started/prerequisites.md) | Hardware, SSH, DNS, and TLS to have ready before install |
+| [Quickstart](getting-started/quickstart.md) | From `init agent-toolkit` to a working `/v1/chat/completions` call |
+| [Build your first agent](getting-started/first-agent.md) | A LangChain agent with a tool, called through the gateway |
+
+## Deployment
+
+| Guide | What it covers |
+|---|---|
+| [Multi-node](deployment/multi-node.md) | One control plane plus worker nodes |
+| [Rack-scale](deployment/rack-scale.md) | High-speed fabric via Toolkit Manager (`rack_scale_enabled`) |
+| [Intel® Arc™ GPU](deployment/intel-arc.md) | GPU serving via Toolkit Manager (`vllm-xpu`), including Arc Pro B-Series / B70 |
+| [Docker Compose](deployment/docker.md) | Containers on one Linux host without Toolkit Manager |
+| [Decommission](deployment/decommission.md) | Tear the install down and install again |
+
+Behind a corporate proxy: [Corporate proxy](deployment/proxy.md). Related installs: [Inference Toolkit](https://github.com/intel/inference-toolkit) (`init inference`), [Chatbot Toolkit](https://github.com/intel/chatbot-toolkit) (`init erag`). Model catalog and `./model-manager deploy`: [Deploy a model](https://github.com/intel/toolkit-manager/blob/main/docs/getting-started/deploy-models.md) in Toolkit Manager.
+
+## Customize
+
+Edit YAML under `env/local/` and re-run `install`.
+
+| Guide | What it covers |
+|---|---|
+| [Configuration](configuration/configuration.md) | Which YAML file holds each setting |
+| [Guardrails](configuration/guardrails.md) | Screen each prompt before the main model |
+| [Routing](configuration/routing.md) · [Hybrid router](configuration/hybrid-router.md) | Send a request to one of several models (hybrid is on by default) |
+| [vLLM semantic router](configuration/semantic-router.md) | Opt-in intent routing (`vllm_sr_enabled: true`) |
+
+## Operate
+
+| Guide | What it covers |
+|---|---|
+| [Validate the stack](faq-and-troubleshooting/validate.md) | Check the cluster after install |
+| [Troubleshooting](faq-and-troubleshooting/troubleshooting.md) | Fix a failed install, API call, or pod |
+
+## Reference
+
+| Guide | What it covers |
+|---|---|
+| [Backend connections](reference/backend-connections.md) | Redis, pgvector, sandbox, and gateway URLs |
+| [Agent sandbox](reference/agent-sandbox.md) | Isolated pods for agent-generated code |
+| [OpenShell](reference/openshell.md) | Policy around that code (off by default) |
+| [KubeRay](reference/kuberay.md) | Ray jobs in the cluster (off by default) |
+
+To report a bug or change the toolkit, see [Contributing](../CONTRIBUTING.md).
+
+---
+
+*Intel, the Intel logo, and Arc are trademarks of Intel Corporation or its subsidiaries.*
